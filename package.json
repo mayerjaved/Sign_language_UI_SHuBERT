@@ -1,0 +1,21 @@
+{
+  "name": "sign-language-ui-shubert",
+  "version": "1.0.0",
+  "description": "> **Purpose**: This document is a comprehensive, developer-handoff-ready specification for building and locally deploying a 2-Way Sign Language Translation web application. It is designed to be given to a frontend developer, a backend developer, or another AI assistant with no prior context on this project.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mayerjaved/Sign_language_UI_SHuBERT.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mayerjaved/Sign_language_UI_SHuBERT/issues"
+  },
+  "homepage": "https://github.com/mayerjaved/Sign_language_UI_SHuBERT#readme"
+}
