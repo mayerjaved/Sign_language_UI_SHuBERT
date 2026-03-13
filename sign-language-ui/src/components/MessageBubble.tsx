@@ -17,7 +17,7 @@ export default function MessageBubble({ message }: { message: Message }) {
           "rounded-2xl px-4 py-3 text-sm shadow-sm md:text-base",
           isUser
             ? "rounded-br-sm bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.7)]"
-            : "rounded-bl-sm border border-slate-200 bg-white text-slate-700",
+            : "rounded-bl-sm border border-[color:var(--border)] bg-[color:var(--surface)] text-[color:var(--ink)]",
         )}
       >
         {message.type === "text" && (
@@ -39,7 +39,7 @@ export default function MessageBubble({ message }: { message: Message }) {
         )}
       </div>
 
-      <span className="mt-1 px-1 text-[10px] text-slate-400">
+      <span className="mt-1 px-1 text-[10px] text-[color:var(--muted)]">
         {message.timestamp.toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",

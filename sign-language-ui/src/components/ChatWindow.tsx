@@ -21,8 +21,8 @@ export default function ChatWindow({ messages }: ChatWindowProps) {
   return (
     <div className="flex-1 w-full px-6 py-6 md:px-8 md:py-8 space-y-6 custom-scrollbar">
       {messages.length === 0 ? (
-        <div className="flex min-h-[260px] flex-col items-center justify-center gap-4 text-slate-500">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500">
+        <div className="flex min-h-[260px] flex-col items-center justify-center gap-4 text-[color:var(--muted)]">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[color:var(--surface-soft)] text-sm font-semibold text-[color:var(--muted)]">
             SL
           </div>
           <p className="max-w-md text-center text-sm">

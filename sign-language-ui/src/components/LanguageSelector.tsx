@@ -17,21 +17,21 @@ export default function LanguageSelector({
   return (
     <div className="relative inline-flex">
       <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-        <Globe className="h-4 w-4 text-slate-400" />
+        <Globe className="h-4 w-4 text-[color:var(--muted)]" />
       </div>
       <select
         value={selected}
         onChange={(e) => onChange(e.target.value as SignLanguage)}
-        className="appearance-none rounded-full border border-slate-200 bg-white/80 py-2 pl-9 pr-9 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-white"
+        className="appearance-none rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] py-2 pl-9 pr-9 text-sm font-medium text-[color:var(--ink)] shadow-sm transition-all hover:border-[color:var(--border)] hover:bg-[color:var(--surface-soft)]"
       >
         {languages.map((lang) => (
-          <option key={lang} value={lang} className="bg-white text-slate-700">
+          <option key={lang} value={lang} className="bg-[color:var(--surface)] text-[color:var(--ink)]">
             {lang} Interpretation
           </option>
         ))}
       </select>
       <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-        <ChevronDown className="h-4 w-4 text-slate-400" />
+        <ChevronDown className="h-4 w-4 text-[color:var(--muted)]" />
       </div>
     </div>
   );

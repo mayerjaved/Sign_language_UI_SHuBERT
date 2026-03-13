@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GraduationCap,
   Home as HomeIcon,
   MessageCircle,
+  Moon,
   Send,
   Settings2,
+  Sun,
   Video,
 } from "lucide-react";
 import ChatWindow from "@/components/ChatWindow";
@@ -17,6 +19,7 @@ import { type Message, type SignLanguage } from "@/lib/types";
 
 type HomeTab = "sign2text" | "text2sign";
 type NavTab = "home" | "messages" | "learning";
+type ThemeMode = "light" | "dark";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
@@ -36,9 +39,39 @@ export default function Home() {
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [homeTab, setHomeTab] = useState<HomeTab>("sign2text");
   const [activeNav, setActiveNav] = useState<NavTab>("home");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   const isHome = activeNav === "home";
   const isSign2Text = homeTab === "sign2text";
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("slai-theme");
+    if (stored === "light" || stored === "dark") {
+      setThemeMode(stored);
+      return;
+    }
+
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    setThemeMode(prefersDark ? "dark" : "light");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    window.localStorage.setItem("slai-theme", themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    const closeOnClick = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeOnClick);
+    return () => document.removeEventListener("mousedown", closeOnClick);
+  }, []);
 
   useEffect(() => {
     getLanguages().then((langs) => {
@@ -144,57 +177,93 @@ export default function Home() {
   );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[color:var(--page)] text-slate-900 selection:bg-blue-200/60">
+    <main className="relative min-h-screen overflow-x-hidden bg-[color:var(--page)] text-[color:var(--ink)] selection:bg-blue-200/60">
       <div className="pointer-events-none absolute -top-48 right-[-20%] h-[420px] w-[420px] rounded-full bg-sky-200/70 blur-[140px]" />
       <div className="pointer-events-none absolute -top-64 left-[-10%] h-[520px] w-[520px] rounded-full bg-cyan-200/70 blur-[160px]" />
       <div className="pointer-events-none absolute bottom-[-30%] left-[15%] h-[520px] w-[520px] rounded-full bg-blue-200/50 blur-[160px]" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/70 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 border-b border-[color:var(--border)] bg-[color:var(--surface-glass)] backdrop-blur-xl">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-8">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md shadow-sky-200/60">
                 <span className="text-xs font-semibold tracking-tight">SL</span>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
                   Sign Language AI
                 </p>
-                <p className="text-sm font-semibold text-slate-800">
+                <p className="text-sm font-semibold text-[color:var(--ink)]">
                   Two-way Translation
                 </p>
               </div>
             </div>
 
-            <button className="rounded-full border border-slate-200 bg-white/80 p-2 text-slate-500 shadow-sm transition-all hover:border-slate-300 hover:text-slate-800 hover:shadow-md">
-              <Settings2 className="h-5 w-5" />
-            </button>
+            <div ref={settingsRef} className="relative">
+              <button
+                onClick={() => setShowSettings((prev) => !prev)}
+                className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-[color:var(--muted)] shadow-sm transition-all hover:text-[color:var(--ink)]"
+                aria-label="Open settings"
+              >
+                <Settings2 className="h-5 w-5" />
+              </button>
+
+              {showSettings && (
+                <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-sm shadow-lg">
+                  <p className="px-3 pb-2 text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
+                    Appearance
+                  </p>
+                  <button
+                    onClick={() => setThemeMode("light")}
+                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 transition-all ${
+                      themeMode === "light"
+                        ? "bg-[color:var(--chip)] text-[color:var(--chip-text)]"
+                        : "text-[color:var(--ink)] hover:bg-[color:var(--surface-soft)]"
+                    }`}
+                  >
+                    <Sun className="h-4 w-4" />
+                    Light mode
+                  </button>
+                  <button
+                    onClick={() => setThemeMode("dark")}
+                    className={`mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 transition-all ${
+                      themeMode === "dark"
+                        ? "bg-[color:var(--chip)] text-[color:var(--chip-text)]"
+                        : "text-[color:var(--ink)] hover:bg-[color:var(--surface-soft)]"
+                    }`}
+                  >
+                    <Moon className="h-4 w-4" />
+                    Dark mode
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
-        <section className="flex-1 px-4 pb-40 pt-6 md:px-8">
+        <section className="flex-1 px-4 pb-44 pt-6 md:px-8">
           {isHome ? (
-            <div className="mx-auto w-full max-w-5xl animate-rise rounded-[28px] border border-slate-200/80 bg-white/70 shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/60 px-6 py-4">
+            <div className="mx-auto w-full max-w-5xl animate-rise rounded-[28px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--border)] px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 text-sm font-semibold text-sky-600">
                     AI
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">Home workspace</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm font-semibold text-[color:var(--ink)]">Home workspace</p>
+                    <p className="text-xs text-[color:var(--muted)]">
                       Gesture to text now, avatar generation in Phase 2
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center rounded-full bg-slate-100 p-1 text-sm font-medium text-slate-500">
+                <div className="flex items-center rounded-full bg-[color:var(--surface-soft)] p-1 text-sm font-medium text-[color:var(--muted)]">
                   <button
                     onClick={() => setHomeTab("sign2text")}
                     className={`rounded-full px-4 py-2 transition-all ${
                       isSign2Text
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "hover:text-slate-700"
+                        ? "bg-[color:var(--surface)] text-[color:var(--ink)] shadow-sm"
+                        : "hover:text-[color:var(--ink)]"
                     }`}
                   >
                     Sign2Text
@@ -203,8 +272,8 @@ export default function Home() {
                     onClick={() => setHomeTab("text2sign")}
                     className={`rounded-full px-4 py-2 transition-all ${
                       !isSign2Text
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "hover:text-slate-700"
+                        ? "bg-[color:var(--surface)] text-[color:var(--ink)] shadow-sm"
+                        : "hover:text-[color:var(--ink)]"
                     }`}
                   >
                     Text2Sign
@@ -212,11 +281,11 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/60 px-6 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--border)] px-6 py-3">
                 {isSign2Text ? (
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                      <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
                         From
                       </span>
                       <LanguageSelector
@@ -226,10 +295,10 @@ export default function Home() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                      <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
                         To
                       </span>
-                      <span className="rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+                      <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs font-semibold text-[color:var(--ink)]">
                         English
                       </span>
                     </div>
@@ -237,15 +306,15 @@ export default function Home() {
                 ) : (
                   <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                      <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
                         From
                       </span>
-                      <span className="rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700">
+                      <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs font-semibold text-[color:var(--ink)]">
                         English
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                      <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
                         To
                       </span>
                       <LanguageSelector
@@ -257,7 +326,7 @@ export default function Home() {
                   </div>
                 )}
 
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
                   Powered by SHuBERT
                 </p>
               </div>
@@ -265,24 +334,24 @@ export default function Home() {
               <ChatWindow messages={messages} />
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-5xl animate-rise rounded-[28px] border border-slate-200/80 bg-white/70 px-8 py-16 text-center shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-              <p className="text-sm uppercase tracking-[0.2em] text-slate-400">
+            <div className="mx-auto w-full max-w-5xl animate-rise rounded-[28px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] px-8 py-16 text-center shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+              <p className="text-sm uppercase tracking-[0.2em] text-[color:var(--muted)]">
                 {activeNav === "messages" ? "Messaging" : "Learning"}
               </p>
-              <p className="mt-3 text-lg font-semibold text-slate-800">
+              <p className="mt-3 text-lg font-semibold text-[color:var(--ink)]">
                 {activeNav === "messages"
                   ? "Team messaging is coming next."
                   : "Learning modules will live here."}
               </p>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-[color:var(--muted)]">
                 Tell me what you want in this section and I will build it.
               </p>
             </div>
           )}
         </section>
 
-        <footer className="fixed bottom-0 left-0 z-30 w-full border-t border-slate-200/70 bg-white/80 px-4 pb-safe pt-3 backdrop-blur-xl">
-          <div className="mx-auto w-full max-w-5xl space-y-3">
+        <footer className="fixed bottom-0 left-0 z-30 w-full border-t border-[color:var(--border)] bg-[color:var(--surface-glass)] px-4 pb-safe pt-3 backdrop-blur-xl">
+          <div className="relative mx-auto w-full max-w-5xl space-y-3">
             {isHome && (
               <>
                 {showVideoRecorder && isSign2Text && (
@@ -292,14 +361,14 @@ export default function Home() {
                   />
                 )}
 
-                <div className="flex items-end gap-2 rounded-[24px] border border-slate-200 bg-white/90 p-2 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.6)] transition-all focus-within:border-blue-400/40 focus-within:ring-4 focus-within:ring-blue-200/50 md:gap-3">
+                <div className="flex items-end gap-2 rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface)] p-2 shadow-[0_18px_50px_-35px_rgba(15,23,42,0.6)] transition-all focus-within:border-blue-400/40 focus-within:ring-4 focus-within:ring-blue-200/50 md:gap-3">
                   {isSign2Text && (
                     <button
                       onClick={() => setShowVideoRecorder(!showVideoRecorder)}
                       className={`flex-shrink-0 rounded-full p-3 transition-all ${
                         showVideoRecorder
                           ? "bg-blue-600/10 text-blue-700"
-                          : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                          : "bg-[color:var(--surface-soft)] text-[color:var(--muted)] hover:text-[color:var(--ink)]"
                       }`}
                       title="Record Gesture"
                     >
@@ -316,7 +385,7 @@ export default function Home() {
                           ? "Type a note or paste text..."
                           : `Type English for ${targetLang} avatar...`
                       }
-                      className="max-h-32 w-full resize-none overflow-hidden border-0 bg-transparent px-2 py-3 text-[15px] leading-tight text-slate-800 outline-none placeholder:text-slate-400 focus:ring-0"
+                      className="max-h-32 w-full resize-none overflow-hidden border-0 bg-transparent px-2 py-3 text-[15px] leading-tight text-[color:var(--ink)] outline-none placeholder:text-[color:var(--muted)] focus:ring-0"
                       rows={1}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
@@ -338,7 +407,7 @@ export default function Home() {
               </>
             )}
 
-            <nav className="flex items-center justify-between rounded-[22px] border border-slate-200 bg-white/90 px-3 py-2 shadow-sm">
+            <nav className="flex items-center justify-between rounded-[22px] border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 shadow-sm">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeNav === item.id;
@@ -349,8 +418,8 @@ export default function Home() {
                     onClick={() => setActiveNav(item.id)}
                     className={`flex flex-1 flex-col items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold transition-all ${
                       isActive
-                        ? "bg-slate-900 text-white shadow-[0_10px_24px_-14px_rgba(15,23,42,0.8)]"
-                        : "text-slate-500 hover:text-slate-700"
+                        ? "bg-[color:var(--nav-active)] text-white shadow-[0_10px_24px_-14px_rgba(15,23,42,0.8)]"
+                        : "text-[color:var(--muted)] hover:text-[color:var(--ink)]"
                     }`}
                   >
                     <Icon className="h-4 w-4" />

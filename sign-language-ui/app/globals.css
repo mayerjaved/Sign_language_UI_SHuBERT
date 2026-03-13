@@ -4,11 +4,30 @@
   --page: #f5f7fb;
   --surface: #ffffff;
   --surface-soft: #f8fafc;
+  --surface-glass: rgba(255, 255, 255, 0.78);
   --ink: #0f172a;
   --muted: #5b6b82;
   --border: #e2e8f0;
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
+  --chip: #eef2ff;
+  --chip-text: #1e3a8a;
+  --nav-active: #0f172a;
+}
+
+:root[data-theme="dark"] {
+  --page: #0b1120;
+  --surface: #0f172a;
+  --surface-soft: #111827;
+  --surface-glass: rgba(15, 23, 42, 0.78);
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #1e293b;
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --chip: #1e293b;
+  --chip-text: #e2e8f0;
+  --nav-active: #e2e8f0;
 }
 
 @layer utilities {
@@ -56,6 +75,10 @@ body {
 
 ::selection {
   background: rgba(37, 99, 235, 0.2);
+}
+
+:root[data-theme="dark"] ::selection {
+  background: rgba(56, 189, 248, 0.25);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

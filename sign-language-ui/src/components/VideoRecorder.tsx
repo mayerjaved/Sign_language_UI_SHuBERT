@@ -62,7 +62,7 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="absolute bottom-full left-0 mb-4 w-full overflow-hidden rounded-[24px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+        className="absolute bottom-full left-0 mb-4 w-full overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl"
       >
         {isRecording && (
           <div
@@ -72,7 +72,7 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
         )}
 
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex items-center justify-between text-sm text-[color:var(--muted)]">
             <div className="flex items-center gap-2 font-medium">
               {isRecording && (
                 <span className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]" />
@@ -85,13 +85,13 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
                     : "Ready to record"}
               </span>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 font-mono text-xs text-slate-500">
+            <span className="rounded-full bg-[color:var(--surface-soft)] px-3 py-1 font-mono text-xs text-[color:var(--muted)]">
               0:{elapsed.toString().padStart(2, "0")} / 0:
               {maxSeconds.toString().padStart(2, "0")}
             </span>
           </div>
 
-          <div className="aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-950/95 shadow-inner">
+          <div className="aspect-video w-full overflow-hidden rounded-2xl border border-[color:var(--border)] bg-slate-950/95 shadow-inner">
             {showLivePreview ? (
               <video
                 ref={previewRef}
@@ -121,7 +121,7 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
             {!isRecording && !videoBlob ? (
               <button
                 onClick={startRecording}
-                className="group flex items-center gap-3 rounded-full border border-rose-200/60 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-rose-300 hover:text-slate-900 hover:shadow-md"
+                className="group flex items-center gap-3 rounded-full border border-rose-200/60 bg-[color:var(--surface)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] shadow-sm transition-all hover:border-rose-300 hover:shadow-md"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_8px_18px_-8px_rgba(244,63,94,0.8)]">
                   <span className="block h-3 w-3 rounded-full bg-white/90" />
@@ -140,7 +140,7 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={resetRecording}
-                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:text-slate-800"
+                  className="flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-2.5 text-sm font-medium text-[color:var(--muted)] transition-all hover:text-[color:var(--ink)]"
                 >
                   <RotateCcw className="h-4 w-4" />
                   Retake
@@ -158,7 +158,7 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
 
           <button
             onClick={onCancel}
-            className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400 transition-colors hover:text-slate-600"
+            className="text-xs font-medium uppercase tracking-[0.2em] text-[color:var(--muted)] transition-colors hover:text-[color:var(--ink)]"
           >
             Cancel recording
           </button>
