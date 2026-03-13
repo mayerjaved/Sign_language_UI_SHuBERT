@@ -1,52 +1,51 @@
-import { type Message } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { type Message } from "@/lib/types";
 
 export default function MessageBubble({ message }: { message: Message }) {
-    const isUser = message.sender === "user";
+  const isUser = message.sender === "user";
 
-    return (
-        <div
-            className={cn(
-                "relative flex flex-col max-w-[80%]",
-                isUser ? "items-end" : "items-start"
+  return (
+    <div
+      className={cn(
+        "relative flex max-w-[82%] flex-col",
+        isUser ? "items-end" : "items-start",
+      )}
+    >
+      <div
+        className={cn(
+          "rounded-2xl px-4 py-3 text-sm shadow-sm md:text-base",
+          isUser
+            ? "rounded-br-sm bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.7)]"
+            : "rounded-bl-sm border border-slate-200 bg-white text-slate-700",
+        )}
+      >
+        {message.type === "text" && (
+          <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        )}
+
+        {message.type === "video" && (
+          <div className="relative mb-1 max-w-[300px] overflow-hidden rounded-xl bg-slate-900/90">
+            <video src={message.content} controls className="h-auto w-full" />
+            {message.isTranslating && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/70 text-white">
+                <Loader2 className="h-6 w-6 animate-spin text-sky-300" />
+                <span className="text-xs font-medium uppercase tracking-[0.2em]">
+                  Translating
+                </span>
+              </div>
             )}
-        >
-            <div
-                className={cn(
-                    "px-4 py-3 rounded-2xl shadow-sm text-sm md:text-base",
-                    isUser
-                        ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rounded-tr-sm"
-                        : "bg-slate-800 border border-slate-700 text-slate-200 rounded-tl-sm"
-                )}
-            >
-                {/* Render Text Content */}
-                {message.type === "text" && (
-                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                )}
+          </div>
+        )}
+      </div>
 
-                {/* Render Video Content */}
-                {message.type === "video" && (
-                    <div className="relative rounded-lg overflow-hidden bg-black/40 mb-1 max-w-[280px]">
-                        <video
-                            src={message.content}
-                            controls
-                            className="w-full h-auto object-cover max-h-[300px]"
-                        />
-                        {message.isTranslating && (
-                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white gap-2">
-                                <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-                                <span className="text-xs font-medium">Translating...</span>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            <span className="text-[10px] text-slate-500 mt-1 px-1">
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                {message.type === 'video' && ` • ${message.language}`}
-            </span>
-        </div>
-    );
+      <span className="mt-1 px-1 text-[10px] text-slate-400">
+        {message.timestamp.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+        {message.type === "video" && ` - ${message.language}`}
+      </span>
+    </div>
+  );
 }

@@ -1,100 +1,169 @@
 "use client";
 
-import { useMediaRecorder } from "@/hooks/useMediaRecorder";
-import { Video, Square, Send, RotateCcw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { RotateCcw, Send, Square, Video } from "lucide-react";
+import { useMediaRecorder } from "@/hooks/useMediaRecorder";
 
 interface VideoRecorderProps {
-    onSend: (blob: Blob) => void;
-    onCancel: () => void;
+  onSend: (blob: Blob) => void;
+  onCancel: () => void;
 }
 
 export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) {
-    const {
-        isRecording,
-        elapsed,
-        videoBlob,
-        startRecording,
-        stopRecording,
-        resetRecording,
-        maxSeconds
-    } = useMediaRecorder();
+  const {
+    isRecording,
+    elapsed,
+    videoBlob,
+    previewStream,
+    startRecording,
+    stopRecording,
+    resetRecording,
+    maxSeconds,
+  } = useMediaRecorder();
 
-    const progressPercent = (elapsed / maxSeconds) * 100;
+  const previewRef = useRef<HTMLVideoElement>(null);
 
-    return (
-        <AnimatePresence>
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                className="w-full absolute bottom-full left-0 mb-4 bg-slate-900 border border-slate-700/50 rounded-2xl p-4 shadow-2xl backdrop-blur-xl z-50 overflow-hidden"
-            >
-                {/* Glowing border effect */}
-                {isRecording && (
-                    <div className="absolute top-0 left-0 h-1 bg-red-500/80 w-full transition-all duration-1000 ease-linear shadow-[0_0_15px_rgba(239,68,68,0.5)]"
-                        style={{ width: `${progressPercent}%` }}
-                    />
-                )}
+  const recordedUrl = useMemo(
+    () => (videoBlob ? URL.createObjectURL(videoBlob) : null),
+    [videoBlob],
+  );
 
-                <div className="flex flex-col items-center gap-4">
-                    {/* Header */}
-                    <div className="w-full flex items-center justify-between text-slate-400 text-sm font-medium">
-                        <div className="flex items-center gap-2">
-                            {isRecording && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-                            <span>{isRecording ? "Recording Gesture" : videoBlob ? "Review Gesture" : "Ready to Record"}</span>
-                        </div>
-                        <span className="font-mono text-xs bg-slate-800 px-2 py-1 rounded">
-                            0:{elapsed.toString().padStart(2, '0')} / 0:{maxSeconds.toString().padStart(2, '0')}
-                        </span>
-                    </div>
+  useEffect(() => {
+    return () => {
+      if (recordedUrl) {
+        URL.revokeObjectURL(recordedUrl);
+      }
+    };
+  }, [recordedUrl]);
 
-                    {/* Controls */}
-                    <div className="flex items-center gap-4 justify-center py-2">
-                        {!isRecording && !videoBlob ? (
-                            <button
-                                onClick={startRecording}
-                                className="group relative w-16 h-16 rounded-full bg-slate-800 border-2 border-red-500/50 flex items-center justify-center hover:bg-slate-700 hover:border-red-400 transition-all shadow-[0_0_0_0_rgba(239,68,68,0)] hover:shadow-[0_0_20px_0_rgba(239,68,68,0.3)]"
-                            >
-                                <div className="w-6 h-6 rounded-full bg-red-500 group-hover:scale-110 transition-transform" />
-                            </button>
-                        ) : isRecording ? (
-                            <button
-                                onClick={stopRecording}
-                                className="w-16 h-16 rounded-full bg-slate-800 border-2 border-red-500 flex items-center justify-center hover:bg-slate-700 transition-all animate-pulse"
-                            >
-                                <Square className="w-6 h-6 text-red-500 fill-red-500" />
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={resetRecording}
-                                    className="px-4 py-2.5 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center gap-2 transition-colors border border-slate-700"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                    <span>Retake</span>
-                                </button>
-                                <button
-                                    onClick={() => videoBlob && onSend(videoBlob)}
-                                    className="px-6 py-2.5 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium hover:from-violet-500 hover:to-indigo-500 flex items-center gap-2 transition-all shadow-lg hover:shadow-indigo-500/25"
-                                >
-                                    <span>Send Video</span>
-                                    <Send className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
-                    </div>
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) return;
 
-                    {/* Cancel Footer */}
-                    <button
-                        onClick={onCancel}
-                        className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                        Cancel Recording
-                    </button>
-                </div>
-            </motion.div>
-        </AnimatePresence>
-    );
+    if (previewStream) {
+      preview.srcObject = previewStream;
+      preview
+        .play()
+        .catch(() => {
+          // Ignore autoplay errors; user gesture will start playback.
+        });
+    } else {
+      preview.srcObject = null;
+    }
+  }, [previewStream]);
+
+  const progressPercent = (elapsed / maxSeconds) * 100;
+  const showLivePreview = Boolean(previewStream) && !videoBlob;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.98, y: 10 }}
+        className="absolute bottom-full left-0 mb-4 w-full overflow-hidden rounded-[24px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+      >
+        {isRecording && (
+          <div
+            className="absolute left-0 top-0 h-1 bg-gradient-to-r from-rose-500 via-rose-400 to-orange-300"
+            style={{ width: `${progressPercent}%` }}
+          />
+        )}
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between text-sm text-slate-500">
+            <div className="flex items-center gap-2 font-medium">
+              {isRecording && (
+                <span className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]" />
+              )}
+              <span>
+                {isRecording
+                  ? "Recording gesture"
+                  : videoBlob
+                    ? "Review your take"
+                    : "Ready to record"}
+              </span>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 font-mono text-xs text-slate-500">
+              0:{elapsed.toString().padStart(2, "0")} / 0:
+              {maxSeconds.toString().padStart(2, "0")}
+            </span>
+          </div>
+
+          <div className="aspect-video w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-950/95 shadow-inner">
+            {showLivePreview ? (
+              <video
+                ref={previewRef}
+                autoPlay
+                muted
+                playsInline
+                className="h-full w-full object-cover"
+                onLoadedMetadata={() => {
+                  previewRef.current?.play().catch(() => {});
+                }}
+              />
+            ) : videoBlob && recordedUrl ? (
+              <video
+                src={recordedUrl}
+                controls
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-300">
+                <Video className="h-6 w-6" />
+                <p className="text-xs uppercase tracking-[0.2em]">Camera Preview</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {!isRecording && !videoBlob ? (
+              <button
+                onClick={startRecording}
+                className="group flex items-center gap-3 rounded-full border border-rose-200/60 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-rose-300 hover:text-slate-900 hover:shadow-md"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-white shadow-[0_8px_18px_-8px_rgba(244,63,94,0.8)]">
+                  <span className="block h-3 w-3 rounded-full bg-white/90" />
+                </span>
+                Start recording
+              </button>
+            ) : isRecording ? (
+              <button
+                onClick={() => stopRecording()}
+                className="flex items-center gap-3 rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-16px_rgba(244,63,94,0.9)] transition-all hover:bg-rose-400"
+              >
+                <Square className="h-4 w-4 fill-white" />
+                Stop recording
+              </button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={resetRecording}
+                  className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition-all hover:border-slate-300 hover:text-slate-800"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Retake
+                </button>
+                <button
+                  onClick={() => videoBlob && onSend(videoBlob)}
+                  className="flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500"
+                >
+                  Send video
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={onCancel}
+            className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400 transition-colors hover:text-slate-600"
+          >
+            Cancel recording
+          </button>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
