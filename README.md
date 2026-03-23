@@ -4,6 +4,13 @@
 
 ---
 
+## Current Implementation Notes
+
+For the latest tech stack, run commands, and Cloudflare tunnel setup, see:
+`TECH_STACK_NOTES.md`
+
+---
+
 ## Table of Contents
 
 1.  [Product Overview](#1-product-overview)
