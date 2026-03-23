@@ -1,3 +1,4 @@
+powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_backend_and_vercel.ps1
 # Tech Stack Notes
 
 This file tracks the current implementation details, libraries, and how to run the full system.
