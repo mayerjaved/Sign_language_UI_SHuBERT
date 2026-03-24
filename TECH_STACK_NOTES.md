@@ -55,6 +55,34 @@ graph LR
 - TRSL Docker API: `http://localhost:8001/health`
   - Returns `status` plus TRSL asset readiness flags.
 
+## Checkpoint Config (Single Source of Truth)
+
+Edit this file to update checkpoint paths in one place:
+
+`C:\code_projects\SHuBERT_transferLearning\backEnd_API_signlanguage_UI\checkpoints.json`
+
+Example structure:
+
+```json
+{
+  "asl": { "weights_dir": "ASL" },
+  "trsl": {
+    "weights_dir": "trsl/outputs/trsl_ckpts/<checkpoint_folder>",
+    "shubert_models_dir": "SHuBERT_ckpts",
+    "tokenizer_dir": "ASL/byt5_base"
+  }
+}
+```
+
+## Smoke Tests (ASL + TRSL)
+
+```powershell
+cd C:\code_projects\SHuBERT_transferLearning\backEnd_API_signlanguage_UI
+python run_backend_smoke_tests.py ^
+  --asl-video "C:\code_projects\Sign language data\american_sign_language_data\test_data\test1.mp4" ^
+  --trsl-video "C:\code_projects\Sign language data\turkish_sign_language data\trsl_test_data\doctor_1772841538.mp4"
+```
+
 ## One-Click Start (Local)
 
 Run this from `C:\code_projects\Sign_language_UI_SHuBERT\sign-language-ui`:
