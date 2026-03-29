@@ -10,7 +10,17 @@ export async function translateVideo(videoBlob: Blob, lang: string): Promise<str
         body: formData,
     });
 
-    if (!res.ok) throw new Error(`Translation failed: ${res.statusText}`);
+    if (!res.ok) {
+        let detail = `${res.status} ${res.statusText}`;
+        try {
+            const payload = await res.json();
+            detail = payload?.detail || payload?.text || JSON.stringify(payload);
+        } catch {
+            const text = await res.text();
+            if (text) detail = text;
+        }
+        throw new Error(`Translation failed: ${detail}`);
+    }
     const data = await res.json();
     return data.text;
 }

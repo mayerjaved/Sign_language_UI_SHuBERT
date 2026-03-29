@@ -1,5 +1,10 @@
 powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_backend_and_vercel.ps1
 
+#for local UI hotreload build
+powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_full_stack.ps1
+powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_full_stack.ps1 -ForceTrslRebuild
+
+
 # 2-Way Sign Language Translation App — Full Architecture Plan
 
 > **Purpose**: This document is a comprehensive, developer-handoff-ready specification for building and locally deploying a 2-Way Sign Language Translation web application. It is designed to be given to a frontend developer, a backend developer, or another AI assistant with no prior context on this project.

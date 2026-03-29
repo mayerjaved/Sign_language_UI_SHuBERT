@@ -2,11 +2,51 @@
 # Run from repo root:
 #   powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_backend_and_vercel.ps1
 
+param(
+  [switch]$RestartBackend,
+  [switch]$SkipTrslDocker
+)
+
 $ErrorActionPreference = "Stop"
 
 $uiDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $uiDir
 $envFile = Join-Path $uiDir ".env.local"
 $backendDir = "C:\code_projects\SHuBERT_transferLearning\backEnd_API_signlanguage_UI"
+$mlRootDir = Split-Path -Parent $backendDir
+
+function Show-DeploySourceNotice([string]$repoPath) {
+  Write-Host "Note: Vercel deploy hooks redeploy code already pushed to Git; local files are not uploaded." -ForegroundColor Cyan
+
+  $git = Get-Command git -ErrorAction SilentlyContinue
+  if (-not $git) {
+    Write-Host "Git not found on PATH, so local commit/push status cannot be checked." -ForegroundColor Yellow
+    return
+  }
+
+  $statusOutput = & git -C $repoPath status --porcelain --untracked-files=normal 2>$null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "Could not read git status from $repoPath." -ForegroundColor Yellow
+    return
+  }
+
+  $statusLines = @($statusOutput)
+  if ($statusLines.Count -eq 0) {
+    return
+  }
+
+  Write-Host "Warning: Detected local changes not included in Git history yet." -ForegroundColor Yellow
+  Write-Host "If you expect UI updates on Vercel, commit and push first." -ForegroundColor Yellow
+
+  $maxShown = [Math]::Min($statusLines.Count, 12)
+  for ($i = 0; $i -lt $maxShown; $i++) {
+    Write-Host ("  " + $statusLines[$i]) -ForegroundColor DarkYellow
+  }
+
+  if ($statusLines.Count -gt $maxShown) {
+    Write-Host "  ... (more files omitted)" -ForegroundColor DarkYellow
+  }
+}
 
 function Load-EnvFile([string]$path) {
   if (!(Test-Path $path)) {
@@ -24,7 +64,27 @@ function Load-EnvFile([string]$path) {
   }
 }
 
-function Start-BackendIfNeeded {
+function Stop-BackendOnPort8000 {
+  $listening = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+  if (-not $listening) { return }
+
+  $pids = $listening | Select-Object -ExpandProperty OwningProcess -Unique
+  foreach ($procId in $pids) {
+    try {
+      Write-Host "Stopping process on port 8000 (PID $procId)..." -ForegroundColor Yellow
+      Stop-Process -Id $procId -Force -ErrorAction Stop
+    } catch {
+      Write-Host "Could not stop PID ${procId}: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+  }
+  Start-Sleep -Seconds 1
+}
+
+function Start-BackendIfNeeded([switch]$ForceRestart) {
+  if ($ForceRestart) {
+    Stop-BackendOnPort8000
+  }
+
   $listening = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
   if ($listening) {
     Write-Host "Backend already listening on port 8000." -ForegroundColor Green
@@ -40,8 +100,13 @@ function Start-BackendIfNeeded {
   }
 
   Write-Host "Starting backend API on http://localhost:8000 ..." -ForegroundColor Cyan
-  Start-Process -FilePath $python -ArgumentList "`"$apiPath`"" -WorkingDirectory $backendDir -WindowStyle Normal | Out-Null
+  $proc = Start-Process -FilePath $python -ArgumentList "`"$apiPath`"" -WorkingDirectory $backendDir -WindowStyle Normal -PassThru
   Start-Sleep -Seconds 2
+
+  $listeningAfter = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+  if (-not $listeningAfter) {
+    throw "Backend failed to start on port 8000. Process PID was $($proc.Id)."
+  }
 }
 
 function Get-CloudflaredPath {
@@ -87,10 +152,58 @@ function Start-QuickTunnelAndGetUrl {
   return $tunnelUrl
 }
 
-function Upsert-VercelEnv([string]$projectId, [string]$teamId, [string]$token, [string]$apiUrl) {
+function Test-TrslApiHealthy {
+  try {
+    $res = Invoke-RestMethod -Method Get -Uri "http://localhost:8001/health" -TimeoutSec 4
+    if ($res.status -eq "ok") { return $true }
+    return $false
+  } catch {
+    return $false
+  }
+}
+
+function Start-TrslApiIfNeeded([switch]$Skip) {
+  if ($Skip) {
+    Write-Host "Skipping TRSL Docker API startup (requested)." -ForegroundColor Yellow
+    return
+  }
+
+  if (Test-TrslApiHealthy) {
+    Write-Host "TRSL Docker API already healthy on port 8001." -ForegroundColor Green
+    return
+  }
+
+  Write-Host "Starting TRSL Docker API (docker compose up -d --remove-orphans trsl-api)..." -ForegroundColor Cyan
+  Push-Location $mlRootDir
+  try {
+    & docker compose up -d --remove-orphans trsl-api
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "TRSL Docker API startup command failed. TRSL requests may fail." -ForegroundColor Yellow
+      return
+    }
+  } finally {
+    Pop-Location
+  }
+
+  for ($i = 0; $i -lt 90; $i++) {
+    Start-Sleep -Seconds 1
+    if (Test-TrslApiHealthy) {
+      Write-Host "TRSL Docker API is healthy on http://localhost:8001." -ForegroundColor Green
+      return
+    }
+  }
+
+  Write-Host "TRSL Docker API did not become healthy in time. TRSL requests may fail." -ForegroundColor Yellow
+}
+
+function Upsert-VercelEnv([string]$projectId, [string]$teamId, [string]$teamSlug, [string]$token, [string]$apiUrl) {
   # Vercel env upsert endpoint is in v10.
   $base = "https://api.vercel.com/v10/projects/$projectId/env?upsert=true"
-  if ($teamId) { $base = "$base&teamId=$teamId" }
+  if ($teamId) {
+    $base = "$base&teamId=$teamId"
+  } elseif ($teamSlug) {
+    $base = "$base&slug=$teamSlug"
+  }
 
   $headers = @{
     Authorization = "Bearer $token"
@@ -101,7 +214,7 @@ function Upsert-VercelEnv([string]$projectId, [string]$teamId, [string]$token, [
     key = "NEXT_PUBLIC_API_URL"
     value = $apiUrl
     type = "encrypted"
-    target = @("production")
+    target = @("production", "preview", "development")
   } | ConvertTo-Json
 
   Write-Host "Updating Vercel env NEXT_PUBLIC_API_URL ..." -ForegroundColor Cyan
@@ -121,6 +234,46 @@ function Upsert-VercelEnv([string]$projectId, [string]$teamId, [string]$token, [
     if ($detail) { Write-Host $detail -ForegroundColor Yellow }
     throw
   }
+}
+
+function Upsert-VercelEnvBestEffort(
+  [string]$projectId,
+  [string]$projectName,
+  [string]$teamId,
+  [string]$teamSlug,
+  [string]$token,
+  [string]$apiUrl
+) {
+  $attempts = @()
+  if ($projectId) {
+    if ($teamId) { $attempts += @{ idOrName = $projectId; teamId = $teamId } }
+    if ($teamSlug) { $attempts += @{ idOrName = $projectId; teamSlug = $teamSlug } }
+    $attempts += @{ idOrName = $projectId; teamId = $null }
+  }
+  if ($projectName) {
+    if ($teamId) { $attempts += @{ idOrName = $projectName; teamId = $teamId } }
+    if ($teamSlug) { $attempts += @{ idOrName = $projectName; teamSlug = $teamSlug } }
+    $attempts += @{ idOrName = $projectName; teamId = $null }
+  }
+
+  $seen = @{}
+  foreach ($attempt in $attempts) {
+    $idOrName = $attempt.idOrName
+    $scope = $attempt.teamId
+    $scopeSlug = $attempt.teamSlug
+    $key = "$idOrName|$scope|$scopeSlug"
+    if ($seen.ContainsKey($key)) { continue }
+    $seen[$key] = $true
+
+    try {
+      Upsert-VercelEnv -projectId $idOrName -teamId $scope -teamSlug $scopeSlug -token $token -apiUrl $apiUrl
+      return @{ idOrName = $idOrName; teamId = $scope; teamSlug = $scopeSlug }
+    } catch {
+      Write-Host "Upsert failed for '$idOrName' with teamId '$scope' and slug '$scopeSlug'." -ForegroundColor Yellow
+    }
+  }
+
+  throw "Unable to update NEXT_PUBLIC_API_URL using any configured project/team scope. Verify VERCEL_PROJECT_ID / VERCEL_PROJECT_NAME and team access."
 }
 
 function Invoke-VercelGet([string]$uri, [hashtable]$headers) {
@@ -203,8 +356,24 @@ function Trigger-VercelDeploy([string]$hookUrl) {
     return
   }
   Write-Host "Triggering Vercel deploy hook ..." -ForegroundColor Cyan
-  Invoke-WebRequest -Method Post -Uri $hookUrl | Out-Null
+  try {
+    Invoke-WebRequest -Method Post -Uri $hookUrl | Out-Null
+  } catch {
+    $status = $null
+    $detail = $null
+    if ($_.Exception.Response) {
+      $status = $_.Exception.Response.StatusCode.value__
+      try {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $detail = $reader.ReadToEnd()
+      } catch {}
+    }
+    Write-Host "Deploy hook call failed (status $status). Redeploy manually in Vercel." -ForegroundColor Yellow
+    if ($detail) { Write-Host $detail -ForegroundColor DarkYellow }
+  }
 }
+
+Show-DeploySourceNotice -repoPath $repoRoot
 
 Load-EnvFile $envFile
 
@@ -226,13 +395,14 @@ if (-not (Test-VercelAuth -token $env:VERCEL_TOKEN)) {
   throw "Vercel token invalid or unauthorized."
 }
 
-Start-BackendIfNeeded
+Start-BackendIfNeeded -ForceRestart:$RestartBackend
+Start-TrslApiIfNeeded -Skip:$SkipTrslDocker
 $tunnelUrl = Start-QuickTunnelAndGetUrl
 Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green
 
 try {
-  $resolved = Resolve-VercelScope -projectId $env:VERCEL_PROJECT_ID -teamId $env:VERCEL_TEAM_ID -token $env:VERCEL_TOKEN -fallbackName $env:VERCEL_PROJECT_NAME
-  Upsert-VercelEnv -projectId $resolved.idOrName -teamId $resolved.teamId -token $env:VERCEL_TOKEN -apiUrl $tunnelUrl
+  $resolved = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -apiUrl $tunnelUrl
+  Write-Host "Updated NEXT_PUBLIC_API_URL for project '$($resolved.idOrName)' (teamId '$($resolved.teamId)', slug '$($resolved.teamSlug)')." -ForegroundColor Green
   Trigger-VercelDeploy -hookUrl $env:VERCEL_DEPLOY_HOOK_URL
   Write-Host "Done. The UI should be live once the deploy finishes." -ForegroundColor Green
 } catch {

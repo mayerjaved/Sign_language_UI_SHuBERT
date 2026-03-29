@@ -13,6 +13,7 @@
   --chip: #eef2ff;
   --chip-text: #1e3a8a;
   --nav-active: #0f172a;
+  --nav-active-text: #f8fafc;
 }
 
 :root[data-theme="dark"] {
@@ -27,7 +28,8 @@
   --accent-strong: #0ea5e9;
   --chip: #1e293b;
   --chip-text: #e2e8f0;
-  --nav-active: #e2e8f0;
+  --nav-active: #38bdf8;
+  --nav-active-text: #0b1120;
 }
 
 @layer utilities {

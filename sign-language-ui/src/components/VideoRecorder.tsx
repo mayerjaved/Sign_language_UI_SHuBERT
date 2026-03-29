@@ -8,9 +8,10 @@ import { useMediaRecorder } from "@/hooks/useMediaRecorder";
 interface VideoRecorderProps {
   onSend: (blob: Blob) => void;
   onCancel: () => void;
+  inline?: boolean;
 }
 
-export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) {
+export default function VideoRecorder({ onSend, onCancel, inline = false }: VideoRecorderProps) {
   const {
     isRecording,
     elapsed,
@@ -55,6 +56,9 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
 
   const progressPercent = (elapsed / maxSeconds) * 100;
   const showLivePreview = Boolean(previewStream) && !videoBlob;
+  const containerClassName = inline
+    ? "w-full overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+    : "absolute bottom-full left-0 mb-4 w-full overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl";
 
   return (
     <AnimatePresence>
@@ -62,7 +66,7 @@ export default function VideoRecorder({ onSend, onCancel }: VideoRecorderProps) 
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
-        className="absolute bottom-full left-0 mb-4 w-full overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+        className={containerClassName}
       >
         {isRecording && (
           <div
