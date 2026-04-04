@@ -357,7 +357,7 @@ function Trigger-VercelDeploy([string]$hookUrl) {
   }
   Write-Host "Triggering Vercel deploy hook ..." -ForegroundColor Cyan
   try {
-    Invoke-WebRequest -Method Post -Uri $hookUrl | Out-Null
+    Invoke-WebRequest -Method Post -Uri $hookUrl -UseBasicParsing | Out-Null
   } catch {
     $status = $null
     $detail = $null
