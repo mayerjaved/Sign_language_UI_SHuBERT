@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import {
   Camera,
   GraduationCap,
-  Hand,
   Home as HomeIcon,
-  Languages,
   MessageCircle,
   Moon,
   Search,
@@ -180,6 +179,40 @@ const makeSeedThreads = (): MessagingThread[] => [
   },
 ];
 
+const smoothScrollElementToViewportCenter = (element: HTMLElement, durationMs = 1300) => {
+  const startY = window.scrollY;
+  const rect = element.getBoundingClientRect();
+  const absoluteTop = rect.top + startY;
+  const desiredY = absoluteTop - window.innerHeight / 2 + rect.height / 2;
+  const maxY = Math.max(document.documentElement.scrollHeight - window.innerHeight, 0);
+  const targetY = Math.min(Math.max(desiredY, 0), maxY);
+  const distance = targetY - startY;
+
+  if (Math.abs(distance) < 2) {
+    window.scrollTo({ top: targetY, left: 0 });
+    return;
+  }
+
+  const easeInOutCubic = (progress: number) =>
+    progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+  const startTime = performance.now();
+  const step = (now: number) => {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / durationMs, 1);
+    const eased = easeInOutCubic(progress);
+    window.scrollTo({ top: startY + distance * eased, left: 0 });
+
+    if (progress < 1) {
+      window.requestAnimationFrame(step);
+    }
+  };
+
+  window.requestAnimationFrame(step);
+};
+
 export default function Home() {
   const [languages, setLanguages] = useState<SignLanguage[]>(["ASL", "TRSL"]);
   const [targetLang, setTargetLang] = useState<SignLanguage>("ASL");
@@ -192,6 +225,7 @@ export default function Home() {
   const [sendMode, setSendMode] = useState<SendMode>("avatar");
   const [threadComposerText, setThreadComposerText] = useState("");
   const [homeTab, setHomeTab] = useState<HomeTab>("sign2text");
+  const [pendingHomeScrollTarget, setPendingHomeScrollTarget] = useState<HomeTab | null>(null);
   const [activeNav, setActiveNav] = useState<NavTab>("home");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") {
@@ -207,6 +241,8 @@ export default function Home() {
   const [homeAvatarPrompt, setHomeAvatarPrompt] = useState("");
   const [homeAvatarPreview, setHomeAvatarPreview] = useState<string | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const sign2TextFocusRef = useRef<HTMLDivElement>(null);
+  const text2SignFocusRef = useRef<HTMLDivElement>(null);
   const threadBottomRef = useRef<HTMLDivElement>(null);
   const activeThreadIdRef = useRef(activeThreadId);
 
@@ -258,6 +294,23 @@ export default function Home() {
     threadBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeThreadId, threads]);
 
+  useEffect(() => {
+    if (!pendingHomeScrollTarget || !isHome) {
+      return;
+    }
+
+    const element =
+      pendingHomeScrollTarget === "sign2text"
+        ? sign2TextFocusRef.current
+        : text2SignFocusRef.current;
+    if (!element) {
+      return;
+    }
+
+    smoothScrollElementToViewportCenter(element, 1300);
+    setPendingHomeScrollTarget(null);
+  }, [pendingHomeScrollTarget, homeTab, showVideoRecorder, isHome]);
+
   const handleSendVideo = async (blob: Blob) => {
     if (!isSign2Text) return;
     if (lastVideoUrl) {
@@ -297,6 +350,17 @@ export default function Home() {
     if (nextTab === "text2sign") {
       setShowVideoRecorder(false);
     }
+  };
+
+  const handleTrySignToText = () => {
+    switchHomeTab("sign2text");
+    setShowVideoRecorder(true);
+    setPendingHomeScrollTarget("sign2text");
+  };
+
+  const handleTryTextToSign = () => {
+    switchHomeTab("text2sign");
+    setPendingHomeScrollTarget("text2sign");
   };
 
   const makeMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -421,68 +485,73 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-[color:var(--page)] text-[color:var(--ink)] selection:bg-blue-200/60">
-      <div className="pointer-events-none absolute -top-48 right-[-20%] h-[420px] w-[420px] rounded-full bg-sky-200/70 blur-[140px]" />
-      <div className="pointer-events-none absolute -top-64 left-[-10%] h-[520px] w-[520px] rounded-full bg-cyan-200/70 blur-[160px]" />
-      <div className="pointer-events-none absolute bottom-[-30%] left-[15%] h-[520px] w-[520px] rounded-full bg-blue-200/50 blur-[160px]" />
+      <div className="pointer-events-none absolute -top-48 right-[-20%] h-[420px] w-[420px] rounded-full bg-sky-200/40 blur-[160px]" />
+      <div className="pointer-events-none absolute -top-64 left-[-10%] h-[520px] w-[520px] rounded-full bg-cyan-200/35 blur-[180px]" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 border-b border-[color:var(--border)] bg-[color:var(--surface-glass)] backdrop-blur-xl">
-          <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-8">
-            <div className="flex items-center gap-3">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md shadow-sky-200/60">
-                <Hand className="h-4 w-4" />
-                <span className="absolute -bottom-1 -right-1 rounded-full border border-white/40 bg-slate-900/80 p-1 text-white">
-                  <Languages className="h-2.5 w-2.5" />
-                </span>
+        <header className="sticky top-0 z-30 border-b border-[color:var(--border)] bg-[color:var(--surface-glass)]/95 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-8">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br from-cyan-300/25 via-sky-300/10 to-slate-900/55 p-0.5 shadow-[0_12px_30px_-18px_rgba(8,145,178,0.8)]">
+                <Image
+                  src="/logo-bridge.png"
+                  alt="Gesture Bridge logo"
+                  width={56}
+                  height={56}
+                  className="h-full w-full rounded-[13px] object-cover"
+                  priority
+                />
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                  Sign Language AI
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold tracking-[0.01em] text-[color:var(--ink)] md:text-lg">
+                  Gesture Bridge
                 </p>
-                <p className="text-sm font-semibold text-[color:var(--ink)]">
-                  Two-way Translation
+                <p className="truncate text-xs text-[color:var(--muted)] md:text-sm">
+                  Connecting the world through sign language.
                 </p>
               </div>
             </div>
 
-            <div ref={settingsRef} className="relative">
-              <button
-                onClick={() => setShowSettings((prev) => !prev)}
-                className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-[color:var(--muted)] shadow-sm transition-all hover:text-[color:var(--ink)]"
-                aria-label="Open settings"
-              >
-                <Settings2 className="h-5 w-5" />
-              </button>
+            <div className="flex items-center gap-2">
+              <div ref={settingsRef} className="relative">
+                <button
+                  onClick={() => setShowSettings((prev) => !prev)}
+                  className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-[color:var(--muted)] shadow-sm transition-all hover:text-[color:var(--ink)]"
+                  aria-label="Open settings"
+                >
+                  <Settings2 className="h-5 w-5" />
+                </button>
 
-              {showSettings && (
-                <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-sm shadow-lg">
-                  <p className="px-3 pb-2 text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                    Appearance
-                  </p>
-                  <button
-                    onClick={() => setThemeMode("light")}
-                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 transition-all ${
-                      themeMode === "light"
-                        ? "bg-[color:var(--chip)] text-[color:var(--chip-text)]"
-                        : "text-[color:var(--ink)] hover:bg-[color:var(--surface-soft)]"
-                    }`}
-                  >
-                    <Sun className="h-4 w-4" />
-                    Light mode
-                  </button>
-                  <button
-                    onClick={() => setThemeMode("dark")}
-                    className={`mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 transition-all ${
-                      themeMode === "dark"
-                        ? "bg-[color:var(--chip)] text-[color:var(--chip-text)]"
-                        : "text-[color:var(--ink)] hover:bg-[color:var(--surface-soft)]"
-                    }`}
-                  >
-                    <Moon className="h-4 w-4" />
-                    Dark mode
-                  </button>
-                </div>
-              )}
+                {showSettings && (
+                  <div className="absolute right-0 mt-3 w-48 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-sm shadow-lg">
+                    <p className="px-3 pb-2 text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
+                      Appearance
+                    </p>
+                    <button
+                      onClick={() => setThemeMode("light")}
+                      className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 transition-all ${
+                        themeMode === "light"
+                          ? "bg-[color:var(--chip)] text-[color:var(--chip-text)]"
+                          : "text-[color:var(--ink)] hover:bg-[color:var(--surface-soft)]"
+                      }`}
+                    >
+                      <Sun className="h-4 w-4" />
+                      Light mode
+                    </button>
+                    <button
+                      onClick={() => setThemeMode("dark")}
+                      className={`mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 transition-all ${
+                        themeMode === "dark"
+                          ? "bg-[color:var(--chip)] text-[color:var(--chip-text)]"
+                          : "text-[color:var(--ink)] hover:bg-[color:var(--surface-soft)]"
+                      }`}
+                    >
+                      <Moon className="h-4 w-4" />
+                      Dark mode
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
@@ -490,52 +559,80 @@ export default function Home() {
         <section className="flex-1 px-4 pb-28 pt-6 md:px-8">
           {isHome ? (
             <div className="mx-auto w-full max-w-6xl">
-              <div className="relative animate-rise overflow-hidden rounded-[30px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-6 shadow-[0_34px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur-xl md:p-8">
-                <div className="pointer-events-none absolute -right-24 top-[-110px] h-[280px] w-[280px] rounded-full bg-sky-300/40 blur-[110px]" />
-                <div className="pointer-events-none absolute -left-24 bottom-[-120px] h-[280px] w-[280px] rounded-full bg-cyan-200/40 blur-[110px]" />
+              <div className="relative animate-rise overflow-hidden rounded-[32px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-6 shadow-[0_34px_82px_-56px_rgba(15,23,42,0.55)] backdrop-blur-xl md:p-10">
+                <div className="pointer-events-none absolute -right-20 top-[-120px] h-[320px] w-[320px] rounded-full bg-sky-300/25 blur-[120px]" />
+                <div className="pointer-events-none absolute -left-20 bottom-[-150px] h-[320px] w-[320px] rounded-full bg-cyan-200/25 blur-[130px]" />
 
-                <div className="relative z-10 grid gap-7 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div>
-                    <p className="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-500">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Intro Screen
-                    </p>
-                    <h1 className="mt-4 text-3xl font-semibold leading-tight text-[color:var(--ink)] md:text-4xl">
-                      Instant sign communication, designed for real conversations.
-                    </h1>
-                    <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[color:var(--muted)] md:text-base">
-                      Record gestures and convert to text, or type text and relay it
-                      as avatar gestures. This home page is now the primary experience,
-                      focused on clarity and immediate action.
-                    </p>
+                <div className="relative z-10 space-y-8">
+                  <div className="mx-auto flex w-full max-w-4xl flex-col justify-between">
+                    <div>
+                      <p className="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-500">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Welcome
+                      </p>
+                      <h1 className="mt-4 text-3xl font-semibold leading-tight text-[color:var(--ink)] md:text-5xl">
+                        Start signing. Start understanding.
+                      </h1>
+                      <p className="mt-4 max-w-xl text-sm leading-relaxed text-[color:var(--muted)] md:text-base">
+                        Translate sign language to text, or type text and preview
+                        sign output. Everything here is built to help you try the app
+                        in under a minute.
+                      </p>
+                    </div>
 
-                    <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">Step 1</p>
-                        <p className="mt-1 text-sm font-semibold text-[color:var(--ink)]">
-                          Select language
+                    <div className="mt-7 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xs font-semibold text-sky-600">
+                          1
+                        </span>
+                        <p className="text-sm text-[color:var(--ink)]">
+                          Choose your translation language.
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">Step 2</p>
-                        <p className="mt-1 text-sm font-semibold text-[color:var(--ink)]">
-                          Translate video or text
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xs font-semibold text-sky-600">
+                          2
+                        </span>
+                        <p className="text-sm text-[color:var(--ink)]">
+                          Record a short clip or type a message.
                         </p>
                       </div>
-                      <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">Step 3</p>
-                        <p className="mt-1 text-sm font-semibold text-[color:var(--ink)]">
-                          Share clear output
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xs font-semibold text-sky-600">
+                          3
+                        </span>
+                        <p className="text-sm text-[color:var(--ink)]">
+                          See your result instantly.
                         </p>
                       </div>
                     </div>
+
+                    <div className="mt-7 flex flex-wrap gap-3">
+                      <button
+                        onClick={handleTrySignToText}
+                        className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_14px_34px_-20px_rgba(37,99,235,0.95)] transition-all hover:from-sky-500 hover:to-blue-500"
+                      >
+                        Try Sign to Text
+                        <Video className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={handleTryTextToSign}
+                        className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-5 py-2.5 text-sm font-semibold text-[color:var(--ink)] transition-all hover:bg-[color:var(--surface-soft)]"
+                      >
+                        Try Text to Sign
+                        <Send className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface)] p-5 shadow-sm">
+                  <div className="mx-auto w-full max-w-4xl rounded-[26px] border border-[color:var(--border)] bg-[color:var(--surface)]/88 p-5 shadow-sm md:p-6">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                        Guided Quick Start
-                      </p>
+                      <div>
+                        <p className="text-base font-semibold text-[color:var(--ink)]">Try it now</p>
+                        <p className="text-xs text-[color:var(--muted)]">
+                          Pick a mode and run a quick test.
+                        </p>
+                      </div>
                       <div className="flex items-center rounded-full bg-[color:var(--surface-soft)] p-1 text-xs font-semibold text-[color:var(--muted)]">
                         <button
                           onClick={() => switchHomeTab("sign2text")}
@@ -545,7 +642,7 @@ export default function Home() {
                               : "hover:text-[color:var(--ink)]"
                           }`}
                         >
-                          Sign2Text
+                          Sign to Text
                         </button>
                         <button
                           onClick={() => switchHomeTab("text2sign")}
@@ -555,78 +652,86 @@ export default function Home() {
                               : "hover:text-[color:var(--ink)]"
                           }`}
                         >
-                          Text2Sign
+                          Text to Sign
                         </button>
                       </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-4">
-                      {isSign2Text ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                              From
-                            </span>
-                            <LanguageSelector
-                              languages={languages}
-                              selected={targetLang}
-                              onChange={setTargetLang}
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                              To
-                            </span>
-                            <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs font-semibold text-[color:var(--ink)]">
-                              English
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                              From
-                            </span>
-                            <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs font-semibold text-[color:var(--ink)]">
-                              English
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                              To
-                            </span>
-                            <LanguageSelector
-                              languages={languages}
-                              selected={targetLang}
-                              onChange={setTargetLang}
-                            />
-                          </div>
-                        </>
-                      )}
+                    <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-4">
+                        {isSign2Text ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-[color:var(--muted)]">
+                                From
+                              </span>
+                              <LanguageSelector
+                                languages={languages}
+                                selected={targetLang}
+                                onChange={setTargetLang}
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-[color:var(--muted)]">
+                                To
+                              </span>
+                              <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs font-semibold text-[color:var(--ink)]">
+                                English
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-[color:var(--muted)]">
+                                From
+                              </span>
+                              <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1 text-xs font-semibold text-[color:var(--ink)]">
+                                English
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-[color:var(--muted)]">
+                                To
+                              </span>
+                              <LanguageSelector
+                                languages={languages}
+                                selected={targetLang}
+                                onChange={setTargetLang}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {isSign2Text ? (
                       <div className="mt-4">
                         {showVideoRecorder ? (
-                          <VideoRecorder
-                            inline
-                            onSend={handleSendVideo}
-                            onCancel={() => setShowVideoRecorder(false)}
-                          />
+                          <div ref={sign2TextFocusRef}>
+                            <VideoRecorder
+                              inline
+                              onSend={handleSendVideo}
+                              onCancel={() => setShowVideoRecorder(false)}
+                            />
+                          </div>
                         ) : (
-                          <div className="rounded-2xl border border-[color:var(--border)] bg-slate-950/90 p-4 text-white">
-                            <div className="aspect-video rounded-xl border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.24),_rgba(15,23,42,0.8)_55%)] p-5">
+                          <div
+                            ref={sign2TextFocusRef}
+                            className="rounded-2xl border border-[color:var(--border)] bg-slate-950/93 p-4 text-white"
+                          >
+                            <div className="aspect-video rounded-xl border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.22),_rgba(15,23,42,0.86)_56%)] p-5">
                               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                                 <Camera className="h-6 w-6 text-sky-300" />
-                                <p className="text-sm font-semibold">
-                                  Bigger center recording section
+                                <p className="text-sm font-semibold">Capture a short signing clip</p>
+                                <p className="max-w-xs text-xs text-slate-300">
+                                  Record up to 10 seconds and get translated text in moments.
                                 </p>
                                 <button
                                   onClick={() => setShowVideoRecorder(true)}
-                                  className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/20"
+                                  className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-white/20"
                                 >
-                                  Record Now
+                                  Open Camera
                                   <Video className="h-4 w-4" />
                                 </button>
                               </div>
@@ -635,13 +740,11 @@ export default function Home() {
                         )}
 
                         <div className="mt-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                            Translation Result
-                          </p>
+                          <p className="text-xs font-medium text-[color:var(--muted)]">Result</p>
                           <p className="mt-2 text-sm text-[color:var(--ink)]">
                             {isTranslating
                               ? "Translating video..."
-                              : translationText || "Record a clip to see live translated text here."}
+                              : translationText || "Your translated text appears here after recording."}
                           </p>
                           {lastVideoUrl && (
                             <video
@@ -653,10 +756,11 @@ export default function Home() {
                         </div>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                          Type Message For Avatar
-                        </p>
+                      <div
+                        ref={text2SignFocusRef}
+                        className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-4"
+                      >
+                        <p className="text-xs font-medium text-[color:var(--muted)]">Type a message</p>
                         <textarea
                           value={homeAvatarPrompt}
                           onChange={(event) => setHomeAvatarPrompt(event.target.value)}
@@ -665,9 +769,9 @@ export default function Home() {
                         />
                         <button
                           onClick={handleHomeAvatarPreview}
-                          className="mt-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                          className="mt-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500"
                         >
-                          Generate Avatar Preview
+                          Preview Sign Output
                           <Sparkles className="h-4 w-4" />
                         </button>
                         {homeAvatarPreview && (
@@ -690,14 +794,14 @@ export default function Home() {
                       Chats
                     </p>
                     <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-600">
-                      4 Users
+                      4 Active threads
                     </span>
                   </div>
 
                   <div className="mt-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2">
                     <div className="flex items-center gap-2 text-[color:var(--muted)]">
                       <Search className="h-4 w-4" />
-                      <span className="text-sm">Search dummy users</span>
+                      <span className="text-sm">Search conversations</span>
                     </div>
                   </div>
 

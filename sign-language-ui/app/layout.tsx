@@ -15,8 +15,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sign Language AI",
-  description: "Two-way sign language translation interface",
+  title: "Gesture Bridge",
+  description: "Two-way sign language translation powered by AI",
 };
 
 export default function RootLayout({
