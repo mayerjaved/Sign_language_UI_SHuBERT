@@ -18,7 +18,7 @@ import {
 import LanguageSelector from "@/components/LanguageSelector";
 import MessageBubble from "@/components/MessageBubble";
 import VideoRecorder from "@/components/VideoRecorder";
-import { getLanguages, translateVideo } from "@/lib/api";
+import { generateTextAvatar, getLanguages, translateVideo } from "@/lib/api";
 import { type Message, type SignLanguage } from "@/lib/types";
 
 type HomeTab = "sign2text" | "text2sign";
@@ -239,7 +239,10 @@ export default function Home() {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [homeAvatarPrompt, setHomeAvatarPrompt] = useState("");
-  const [homeAvatarPreview, setHomeAvatarPreview] = useState<string | null>(null);
+  const [isGeneratingHomeAvatar, setIsGeneratingHomeAvatar] = useState(false);
+  const [homeAvatarVideoUrl, setHomeAvatarVideoUrl] = useState<string | null>(null);
+  const [homeAvatarStatus, setHomeAvatarStatus] = useState<string | null>(null);
+  const [homeAvatarError, setHomeAvatarError] = useState<string | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const sign2TextFocusRef = useRef<HTMLDivElement>(null);
   const text2SignFocusRef = useRef<HTMLDivElement>(null);
@@ -336,13 +339,36 @@ export default function Home() {
     }
   };
 
-  const handleHomeAvatarPreview = () => {
+  const handleHomeAvatarPreview = async () => {
     const trimmed = homeAvatarPrompt.trim();
     if (!trimmed) {
       return;
     }
 
-    setHomeAvatarPreview(`Preview for ${targetLang} avatar: "${trimmed}"`);
+    setHomeAvatarError(null);
+    setHomeAvatarStatus(null);
+    setHomeAvatarVideoUrl(null);
+
+    if (targetLang !== "ASL") {
+      setHomeAvatarError("Text-to-avatar is currently available only when ASL is selected.");
+      return;
+    }
+
+    setIsGeneratingHomeAvatar(true);
+    try {
+      const response = await generateTextAvatar(trimmed, targetLang);
+      setHomeAvatarVideoUrl(response.video_src);
+      setHomeAvatarStatus(`Generated ASL avatar for: "${response.resolved_sentence}"`);
+    } catch (error) {
+      console.error(error);
+      const detail =
+        error instanceof Error
+          ? error.message
+          : "Failed to generate avatar. Ensure the backend is running.";
+      setHomeAvatarError(detail);
+    } finally {
+      setIsGeneratingHomeAvatar(false);
+    }
   };
 
   const switchHomeTab = (nextTab: HomeTab) => {
@@ -763,22 +789,52 @@ export default function Home() {
                         <p className="text-xs font-medium text-[color:var(--muted)]">Type a message</p>
                         <textarea
                           value={homeAvatarPrompt}
-                          onChange={(event) => setHomeAvatarPrompt(event.target.value)}
+                          onChange={(event) => {
+                            setHomeAvatarPrompt(event.target.value);
+                            if (homeAvatarError) {
+                              setHomeAvatarError(null);
+                            }
+                          }}
                           placeholder={`Type a message for ${targetLang} avatar...`}
                           className="mt-3 h-24 w-full resize-none rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--ink)] outline-none transition-all focus:border-blue-400/40 focus:ring-4 focus:ring-blue-200/30"
                         />
                         <button
                           onClick={handleHomeAvatarPreview}
-                          className="mt-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500"
+                          disabled={!homeAvatarPrompt.trim() || isGeneratingHomeAvatar}
+                          className="mt-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500 disabled:opacity-55"
                         >
-                          Preview Sign Output
+                          {isGeneratingHomeAvatar ? "Generating Avatar..." : "Generate Sign Output"}
                           <Sparkles className="h-4 w-4" />
                         </button>
-                        {homeAvatarPreview && (
-                          <div className="mt-3 rounded-xl border border-sky-300/45 bg-sky-500/10 p-3 text-sm text-[color:var(--ink)]">
-                            {homeAvatarPreview}
-                          </div>
-                        )}
+                        <div className="mt-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-sm">
+                          <p className="text-xs font-medium text-[color:var(--muted)]">Result</p>
+                          {isGeneratingHomeAvatar ? (
+                            <p className="mt-2 text-[color:var(--ink)]">
+                              Generating ASL avatar video locally...
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-[color:var(--ink)]">
+                              {homeAvatarStatus || "Your generated avatar video will appear here."}
+                            </p>
+                          )}
+                          {homeAvatarError && (
+                            <p className="mt-2 text-sm font-medium text-rose-600">{homeAvatarError}</p>
+                          )}
+                          {homeAvatarVideoUrl && (
+                            <video
+                              src={homeAvatarVideoUrl}
+                              controls
+                              className="mt-3 w-full overflow-hidden rounded-xl border border-[color:var(--border)]"
+                            />
+                          )}
+                          {!isGeneratingHomeAvatar &&
+                            !homeAvatarError &&
+                            targetLang !== "ASL" && (
+                              <p className="mt-2 text-xs text-[color:var(--muted)]">
+                                Select ASL to enable sentence-to-avatar generation.
+                              </p>
+                            )}
+                        </div>
                       </div>
                     )}
                   </div>
