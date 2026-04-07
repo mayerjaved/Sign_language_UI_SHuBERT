@@ -17,8 +17,14 @@ import {
 } from "lucide-react";
 import LanguageSelector from "@/components/LanguageSelector";
 import MessageBubble from "@/components/MessageBubble";
+import TrslWordRecorder from "@/components/TrslWordRecorder";
 import VideoRecorder from "@/components/VideoRecorder";
-import { generateTextAvatar, getLanguages, translateVideo } from "@/lib/api";
+import { generateTextAvatar, getLanguages, translateTrslWord, translateVideo } from "@/lib/api";
+import {
+  TRSL_WORD_MAX_WORDS,
+  TRSL_WORD_PAUSE_SECONDS,
+  TRSL_WORD_RECORDING_SECONDS,
+} from "@/lib/config";
 import { type Message, type SignLanguage } from "@/lib/types";
 
 type HomeTab = "sign2text" | "text2sign";
@@ -220,6 +226,12 @@ export default function Home() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [lastVideoUrl, setLastVideoUrl] = useState<string | null>(null);
   const [translationText, setTranslationText] = useState("");
+  const [trslWords, setTrslWords] = useState<string[]>([]);
+  const [lastTrslWord, setLastTrslWord] = useState<string | null>(null);
+  const [trslTranslationProgress, setTrslTranslationProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [threads, setThreads] = useState<MessagingThread[]>(makeSeedThreads);
   const [activeThreadId, setActiveThreadId] = useState("amina");
   const [sendMode, setSendMode] = useState<SendMode>("avatar");
@@ -251,6 +263,9 @@ export default function Home() {
 
   const isHome = activeNav === "home";
   const isSign2Text = homeTab === "sign2text";
+  const isTrslWordMode = isSign2Text && targetLang === "TRSL";
+  const assembledTrslSentence = trslWords.join(" ");
+  const activeSign2TextResult = isTrslWordMode ? assembledTrslSentence : translationText;
   const activeThread =
     threads.find((thread) => thread.id === activeThreadId) ?? threads[0];
 
@@ -279,6 +294,20 @@ export default function Home() {
         }
       }
     });
+  }, [targetLang]);
+
+  useEffect(() => {
+    setShowVideoRecorder(false);
+    setIsTranslating(false);
+    setTrslTranslationProgress(null);
+
+    if (targetLang === "TRSL") {
+      setTranslationText("");
+      return;
+    }
+
+    setTrslWords([]);
+    setLastTrslWord(null);
   }, [targetLang]);
 
   useEffect(() => {
@@ -316,9 +345,12 @@ export default function Home() {
 
   const handleSendVideo = async (blob: Blob) => {
     if (!isSign2Text) return;
+    if (targetLang === "TRSL") return;
+
     if (lastVideoUrl) {
       URL.revokeObjectURL(lastVideoUrl);
     }
+
     setLastVideoUrl(URL.createObjectURL(blob));
     setIsTranslating(true);
     setTranslationText("");
@@ -336,6 +368,55 @@ export default function Home() {
       alert(detail);
     } finally {
       setIsTranslating(false);
+    }
+  };
+
+  const handleTrslWordCaptureComplete = async (wordClips: Blob[]) => {
+    if (!isSign2Text || targetLang !== "TRSL") {
+      return;
+    }
+    if (wordClips.length === 0) {
+      return;
+    }
+
+    setShowVideoRecorder(false);
+    setIsTranslating(true);
+    setTrslTranslationProgress({ done: 0, total: wordClips.length });
+    setTrslWords([]);
+    setLastTrslWord(null);
+    setTranslationText("");
+
+    try {
+      for (let index = 0; index < wordClips.length; index += 1) {
+        const translatedWord = await translateTrslWord(wordClips[index]);
+        setTrslWords((prev) => [...prev, translatedWord]);
+        setLastTrslWord(translatedWord);
+        setTrslTranslationProgress({ done: index + 1, total: wordClips.length });
+      }
+    } catch (error) {
+      console.error(error);
+      const detail =
+        error instanceof Error
+          ? error.message
+          : "Failed to translate TRSL word clips. Ensure the backend is running.";
+      alert(detail);
+    } finally {
+      setIsTranslating(false);
+      setTrslTranslationProgress(null);
+    }
+  };
+
+  const handleUndoTrslWord = () => {
+    setTrslWords((prev) => prev.slice(0, -1));
+  };
+
+  const handleClearTrslSentence = () => {
+    setTrslWords([]);
+    setLastTrslWord(null);
+    setTrslTranslationProgress(null);
+    if (lastVideoUrl) {
+      URL.revokeObjectURL(lastVideoUrl);
+      setLastVideoUrl(null);
     }
   };
 
@@ -735,11 +816,22 @@ export default function Home() {
                       <div className="mt-4">
                         {showVideoRecorder ? (
                           <div ref={sign2TextFocusRef}>
-                            <VideoRecorder
-                              inline
-                              onSend={handleSendVideo}
-                              onCancel={() => setShowVideoRecorder(false)}
-                            />
+                            {isTrslWordMode ? (
+                              <TrslWordRecorder
+                                inline
+                                maxWords={TRSL_WORD_MAX_WORDS}
+                                recordSeconds={TRSL_WORD_RECORDING_SECONDS}
+                                pauseSeconds={TRSL_WORD_PAUSE_SECONDS}
+                                onComplete={handleTrslWordCaptureComplete}
+                                onCancel={() => setShowVideoRecorder(false)}
+                              />
+                            ) : (
+                              <VideoRecorder
+                                inline
+                                onSend={handleSendVideo}
+                                onCancel={() => setShowVideoRecorder(false)}
+                              />
+                            )}
                           </div>
                         ) : (
                           <div
@@ -749,17 +841,28 @@ export default function Home() {
                             <div className="aspect-video rounded-xl border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.22),_rgba(15,23,42,0.86)_56%)] p-5">
                               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                                 <Camera className="h-6 w-6 text-sky-300" />
-                                <p className="text-sm font-semibold">Capture a short signing clip</p>
+                                <p className="text-sm font-semibold">
+                                  {isTrslWordMode
+                                    ? "Capture TRSL words with auto timing"
+                                    : "Capture a short signing clip"}
+                                </p>
                                 <p className="max-w-xs text-xs text-slate-300">
-                                  Record up to 10 seconds and get translated text in moments.
+                                  {isTrslWordMode
+                                    ? `Recorder runs automatically: green ${TRSL_WORD_RECORDING_SECONDS}s word, red ${TRSL_WORD_PAUSE_SECONDS}s reset, up to ${TRSL_WORD_MAX_WORDS} words.`
+                                    : "Record up to 10 seconds and get translated text in moments."}
                                 </p>
                                 <button
                                   onClick={() => setShowVideoRecorder(true)}
                                   className="inline-flex items-center gap-2 rounded-full bg-white/12 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-white/20"
                                 >
-                                  Open Camera
+                                  {isTrslWordMode ? "Start TRSL word capture" : "Open Camera"}
                                   <Video className="h-4 w-4" />
                                 </button>
+                                {isTrslWordMode && (
+                                  <p className="text-[11px] text-slate-300/90">
+                                    One run can capture up to {TRSL_WORD_MAX_WORDS} words.
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -769,9 +872,51 @@ export default function Home() {
                           <p className="text-xs font-medium text-[color:var(--muted)]">Result</p>
                           <p className="mt-2 text-sm text-[color:var(--ink)]">
                             {isTranslating
-                              ? "Translating video..."
-                              : translationText || "Your translated text appears here after recording."}
+                              ? isTrslWordMode
+                                ? trslTranslationProgress
+                                  ? `Translating words ${trslTranslationProgress.done}/${trslTranslationProgress.total}...`
+                                  : "Translating TRSL words..."
+                                : "Translating video..."
+                              : activeSign2TextResult ||
+                                (isTrslWordMode
+                                  ? "Your word-by-word sentence appears here."
+                                  : "Your translated text appears here after recording.")}
                           </p>
+                          {isTrslWordMode && (
+                            <>
+                              {lastTrslWord && (
+                                <p className="mt-2 text-xs text-[color:var(--muted)]">
+                                  Last word: <span className="font-semibold text-[color:var(--ink)]">{lastTrslWord}</span>
+                                </p>
+                              )}
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {trslWords.map((word, index) => (
+                                  <span
+                                    key={`${index}-${word}`}
+                                    className="rounded-full border border-sky-200/70 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-800"
+                                  >
+                                    {index + 1}. {word}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  onClick={handleUndoTrslWord}
+                                  disabled={trslWords.length === 0 || isTranslating}
+                                  className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ink)] transition-all hover:bg-[color:var(--surface-soft)] disabled:opacity-45"
+                                >
+                                  Undo last word
+                                </button>
+                                <button
+                                  onClick={handleClearTrslSentence}
+                                  disabled={trslWords.length === 0 || isTranslating}
+                                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-all hover:bg-rose-100 disabled:opacity-45"
+                                >
+                                  Clear sentence
+                                </button>
+                              </div>
+                            </>
+                          )}
                           {lastVideoUrl && (
                             <video
                               src={lastVideoUrl}

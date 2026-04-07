@@ -1,7 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 import { MAX_RECORDING_SECONDS } from "@/lib/config";
 
-export function useMediaRecorder() {
+interface UseMediaRecorderOptions {
+  maxSeconds?: number;
+}
+
+export function useMediaRecorder(options: UseMediaRecorderOptions = {}) {
+  const maxSeconds = options.maxSeconds ?? MAX_RECORDING_SECONDS;
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -74,7 +79,7 @@ export function useMediaRecorder() {
       timerRef.current = setInterval(() => {
         setElapsed((prev) => {
           const next = prev + 1;
-          if (next >= MAX_RECORDING_SECONDS) {
+          if (next >= maxSeconds) {
             stopRecording();
           }
           return next;
@@ -84,7 +89,7 @@ export function useMediaRecorder() {
       console.error("Failed to access webcam:", err);
       alert("Please allow webcam access to record gestures.");
     }
-  }, [stopRecording, stopStream]);
+  }, [maxSeconds, stopRecording, stopStream]);
 
   const resetRecording = useCallback(() => {
     if (isRecording) {
@@ -104,6 +109,6 @@ export function useMediaRecorder() {
     startRecording,
     stopRecording,
     resetRecording,
-    maxSeconds: MAX_RECORDING_SECONDS,
+    maxSeconds,
   };
 }

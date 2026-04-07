@@ -9,9 +9,15 @@ interface VideoRecorderProps {
   onSend: (blob: Blob) => void;
   onCancel: () => void;
   inline?: boolean;
+  maxSeconds?: number;
 }
 
-export default function VideoRecorder({ onSend, onCancel, inline = false }: VideoRecorderProps) {
+export default function VideoRecorder({
+  onSend,
+  onCancel,
+  inline = false,
+  maxSeconds: maxSecondsOverride,
+}: VideoRecorderProps) {
   const {
     isRecording,
     elapsed,
@@ -21,7 +27,7 @@ export default function VideoRecorder({ onSend, onCancel, inline = false }: Vide
     stopRecording,
     resetRecording,
     maxSeconds,
-  } = useMediaRecorder();
+  } = useMediaRecorder({ maxSeconds: maxSecondsOverride });
 
   const previewRef = useRef<HTMLVideoElement>(null);
 

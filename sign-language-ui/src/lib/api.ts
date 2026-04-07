@@ -64,6 +64,30 @@ export async function translateVideo(videoBlob: Blob, lang: string): Promise<str
     return data.text;
 }
 
+export async function translateTrslWord(videoBlob: Blob): Promise<string> {
+    const formData = new FormData();
+    formData.append("video", videoBlob, "recording.webm");
+    formData.append("lang", "TRSL");
+
+    const res = await fetch(`${API_BASE}/api/translate_trsl_word`, {
+        method: "POST",
+        body: formData,
+    });
+
+    if (!res.ok) {
+        const detail = await readErrorDetail(res);
+        throw new Error(`TRSL word translation failed: ${detail}`);
+    }
+
+    const data = await res.json();
+    const word = data.word ?? data.text;
+    if (typeof word !== "string" || !word.trim()) {
+        throw new Error("TRSL word translation returned an empty result.");
+    }
+
+    return word.trim();
+}
+
 export async function generateTextAvatar(
     sentence: string,
     lang: string,
