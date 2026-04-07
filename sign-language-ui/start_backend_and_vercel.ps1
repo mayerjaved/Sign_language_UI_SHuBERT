@@ -80,6 +80,49 @@ function Stop-BackendOnPort8000 {
   Start-Sleep -Seconds 1
 }
 
+function Resolve-BackendPython([string]$PreferredVenvPython) {
+  $candidates = @()
+  if ($env:BACKEND_PYTHON) {
+    $candidates += @{ Path = $env:BACKEND_PYTHON; PrefixArgs = @() }
+  }
+  if ($PreferredVenvPython) {
+    $candidates += @{ Path = $PreferredVenvPython; PrefixArgs = @() }
+  }
+  $candidates += @(
+    @{ Path = "C:\Users\mayer\AppData\Local\Programs\Python\Python311\python.exe"; PrefixArgs = @() },
+    @{ Path = "C:\Users\mayer\AppData\Local\Programs\Python\Python310\python.exe"; PrefixArgs = @() },
+    @{ Path = "python"; PrefixArgs = @() },
+    @{ Path = "py"; PrefixArgs = @("-3.11") },
+    @{ Path = "py"; PrefixArgs = @("-3.10") }
+  )
+
+  $seen = @{}
+  foreach ($candidate in $candidates) {
+    $path = $candidate.Path
+    if (-not $path) { continue }
+    $key = "$path|$($candidate.PrefixArgs -join ' ')"
+    if ($seen.ContainsKey($key)) { continue }
+    $seen[$key] = $true
+
+    if ($path -match '^[A-Za-z]:\\') {
+      if (-not (Test-Path $path)) {
+        continue
+      }
+    }
+
+    try {
+      $null = & $path @($candidate.PrefixArgs) --version 2>$null
+      if ($LASTEXITCODE -eq 0) {
+        return $candidate
+      }
+    } catch {
+      continue
+    }
+  }
+
+  throw "Could not find a working Python runtime for backend startup. Set BACKEND_PYTHON in .env.local to a valid python.exe."
+}
+
 function Start-BackendIfNeeded([switch]$ForceRestart) {
   if ($ForceRestart) {
     Stop-BackendOnPort8000
@@ -92,20 +135,42 @@ function Start-BackendIfNeeded([switch]$ForceRestart) {
   }
 
   $venvPython = "C:\code_projects\SHuBERT_transferLearning\.venv310\Scripts\python.exe"
-  $python = if (Test-Path $venvPython) { $venvPython } else { "python" }
+  $pythonConfig = Resolve-BackendPython -PreferredVenvPython $venvPython
+  $python = $pythonConfig.Path
+  $pythonPrefixArgs = @($pythonConfig.PrefixArgs)
   $apiPath = Join-Path $backendDir "api.py"
 
   if (!(Test-Path $apiPath)) {
     throw "Backend api.py not found at $apiPath"
   }
 
+  Write-Host ("Using backend Python: " + $python + " " + ($pythonPrefixArgs -join " ")) -ForegroundColor DarkGray
   Write-Host "Starting backend API on http://localhost:8000 ..." -ForegroundColor Cyan
-  $proc = Start-Process -FilePath $python -ArgumentList "`"$apiPath`"" -WorkingDirectory $backendDir -WindowStyle Normal -PassThru
+  $outLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
+  $errLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
+  $argList = @($pythonPrefixArgs + @("`"$apiPath`""))
+  $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
   Start-Sleep -Seconds 2
 
   $listeningAfter = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
   if (-not $listeningAfter) {
-    throw "Backend failed to start on port 8000. Process PID was $($proc.Id)."
+    $stdoutTail = ""
+    $stderrTail = ""
+    if (Test-Path $outLog) {
+      $stdoutTail = (Get-Content -Path $outLog -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+    }
+    if (Test-Path $errLog) {
+      $stderrTail = (Get-Content -Path $errLog -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+    }
+    if ($stdoutTail) {
+      Write-Host "Backend stdout tail:" -ForegroundColor Yellow
+      Write-Host $stdoutTail -ForegroundColor DarkYellow
+    }
+    if ($stderrTail) {
+      Write-Host "Backend stderr tail:" -ForegroundColor Yellow
+      Write-Host $stderrTail -ForegroundColor DarkYellow
+    }
+    throw "Backend failed to start on port 8000. Process PID was $($proc.Id). Logs: $outLog ; $errLog"
   }
 }
 
