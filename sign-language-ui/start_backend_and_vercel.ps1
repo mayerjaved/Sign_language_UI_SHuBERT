@@ -4,7 +4,8 @@
 
 param(
   [switch]$RestartBackend,
-  [switch]$SkipTrslDocker
+  [switch]$SkipTrslDocker,
+  [bool]$InlineBackendLogs = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,7 +124,7 @@ function Resolve-BackendPython([string]$PreferredVenvPython) {
   throw "Could not find a working Python runtime for backend startup. Set BACKEND_PYTHON in .env.local to a valid python.exe."
 }
 
-function Start-BackendIfNeeded([switch]$ForceRestart) {
+function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true) {
   if ($ForceRestart) {
     Stop-BackendOnPort8000
   }
@@ -146,20 +147,27 @@ function Start-BackendIfNeeded([switch]$ForceRestart) {
 
   Write-Host ("Using backend Python: " + $python + " " + ($pythonPrefixArgs -join " ")) -ForegroundColor DarkGray
   Write-Host "Starting backend API on http://localhost:8000 ..." -ForegroundColor Cyan
-  $outLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
-  $errLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
   $argList = @($pythonPrefixArgs + @("`"$apiPath`""))
-  $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+  $outLog = $null
+  $errLog = $null
+  if ($InlineLogs) {
+    Write-Host "Backend logs will stream in this terminal (InlineBackendLogs=true)." -ForegroundColor DarkGray
+    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -NoNewWindow -PassThru
+  } else {
+    $outLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
+    $errLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
+    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+  }
   Start-Sleep -Seconds 2
 
   $listeningAfter = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
   if (-not $listeningAfter) {
     $stdoutTail = ""
     $stderrTail = ""
-    if (Test-Path $outLog) {
+    if ($outLog -and (Test-Path $outLog)) {
       $stdoutTail = (Get-Content -Path $outLog -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
     }
-    if (Test-Path $errLog) {
+    if ($errLog -and (Test-Path $errLog)) {
       $stderrTail = (Get-Content -Path $errLog -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
     }
     if ($stdoutTail) {
@@ -170,7 +178,10 @@ function Start-BackendIfNeeded([switch]$ForceRestart) {
       Write-Host "Backend stderr tail:" -ForegroundColor Yellow
       Write-Host $stderrTail -ForegroundColor DarkYellow
     }
-    throw "Backend failed to start on port 8000. Process PID was $($proc.Id). Logs: $outLog ; $errLog"
+    if ($outLog -or $errLog) {
+      throw "Backend failed to start on port 8000. Process PID was $($proc.Id). Logs: $outLog ; $errLog"
+    }
+    throw "Backend failed to start on port 8000. Process PID was $($proc.Id). Re-run with -InlineBackendLogs:`$false for captured temp logs."
   }
 }
 
@@ -460,7 +471,7 @@ if (-not (Test-VercelAuth -token $env:VERCEL_TOKEN)) {
   throw "Vercel token invalid or unauthorized."
 }
 
-Start-BackendIfNeeded -ForceRestart:$RestartBackend
+Start-BackendIfNeeded -ForceRestart:$RestartBackend -InlineLogs:$InlineBackendLogs
 Start-TrslApiIfNeeded -Skip:$SkipTrslDocker
 $tunnelUrl = Start-QuickTunnelAndGetUrl
 Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green

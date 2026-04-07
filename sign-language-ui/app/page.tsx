@@ -19,7 +19,12 @@ import LanguageSelector from "@/components/LanguageSelector";
 import MessageBubble from "@/components/MessageBubble";
 import TrslWordRecorder from "@/components/TrslWordRecorder";
 import VideoRecorder from "@/components/VideoRecorder";
-import { generateTextAvatar, getLanguages, translateTrslWord, translateVideo } from "@/lib/api";
+import {
+  generateTextAvatar,
+  getLanguages,
+  translateTrslWordWithMeta,
+  translateVideo,
+} from "@/lib/api";
 import {
   TRSL_WORD_MAX_WORDS,
   TRSL_WORD_PAUSE_SECONDS,
@@ -385,16 +390,32 @@ export default function Home() {
     setTrslWords([]);
     setLastTrslWord(null);
     setTranslationText("");
+    const requestId = `ui-trsl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    console.info(
+      `[TRSL UI] Starting word translation run request_id=${requestId} clips=${wordClips.length}`,
+    );
 
     try {
       for (let index = 0; index < wordClips.length; index += 1) {
-        const translatedWord = await translateTrslWord(wordClips[index]);
+        const wordIndex = index + 1;
+        console.info(
+          `[TRSL UI] Sending word ${wordIndex}/${wordClips.length} request_id=${requestId}`,
+        );
+        const translatedWord = await translateTrslWordWithMeta(wordClips[index], {
+          requestId,
+          wordIndex,
+          wordTotal: wordClips.length,
+        });
+        console.info(
+          `[TRSL UI] Received word ${wordIndex}/${wordClips.length}: "${translatedWord}" request_id=${requestId}`,
+        );
         setTrslWords((prev) => [...prev, translatedWord]);
         setLastTrslWord(translatedWord);
-        setTrslTranslationProgress({ done: index + 1, total: wordClips.length });
+        setTrslTranslationProgress({ done: wordIndex, total: wordClips.length });
       }
     } catch (error) {
-      console.error(error);
+      console.error(`[TRSL UI] Translation run failed request_id=${requestId}`, error);
       const detail =
         error instanceof Error
           ? error.message

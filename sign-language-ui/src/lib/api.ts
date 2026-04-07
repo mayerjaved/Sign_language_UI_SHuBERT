@@ -25,9 +25,14 @@ async function readErrorDetail(res: Response): Promise<string> {
     if (typeof detail === "string") {
         return detail;
     }
-    if (detail && typeof detail === "object" && "message" in (detail as Record<string, unknown>)) {
-        const message = (detail as Record<string, unknown>).message;
+    if (detail && typeof detail === "object") {
+        const record = detail as Record<string, unknown>;
+        const message = record.message;
+        const requestId = record.request_id;
         if (typeof message === "string" && message.trim()) {
+            if (typeof requestId === "string" && requestId.trim()) {
+                return `${message} (request_id=${requestId})`;
+            }
             return message;
         }
     }
@@ -65,12 +70,37 @@ export async function translateVideo(videoBlob: Blob, lang: string): Promise<str
 }
 
 export async function translateTrslWord(videoBlob: Blob): Promise<string> {
+    return translateTrslWordWithMeta(videoBlob);
+}
+
+export interface TrslWordRequestMeta {
+    requestId?: string;
+    wordIndex?: number;
+    wordTotal?: number;
+}
+
+export async function translateTrslWordWithMeta(
+    videoBlob: Blob,
+    meta: TrslWordRequestMeta = {},
+): Promise<string> {
     const formData = new FormData();
     formData.append("video", videoBlob, "recording.webm");
     formData.append("lang", "TRSL");
 
+    const headers: Record<string, string> = {};
+    if (meta.requestId) {
+        headers["X-TRSL-Request-Id"] = meta.requestId;
+    }
+    if (typeof meta.wordIndex === "number") {
+        headers["X-TRSL-Word-Index"] = String(meta.wordIndex);
+    }
+    if (typeof meta.wordTotal === "number") {
+        headers["X-TRSL-Word-Total"] = String(meta.wordTotal);
+    }
+
     const res = await fetch(`${API_BASE}/api/translate_trsl_word`, {
         method: "POST",
+        headers,
         body: formData,
     });
 
