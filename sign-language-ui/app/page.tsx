@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Camera,
+  FileUp,
   GraduationCap,
   Home as HomeIcon,
   MessageCircle,
@@ -263,6 +264,7 @@ export default function Home() {
   const settingsRef = useRef<HTMLDivElement>(null);
   const sign2TextFocusRef = useRef<HTMLDivElement>(null);
   const text2SignFocusRef = useRef<HTMLDivElement>(null);
+  const aslVideoUploadInputRef = useRef<HTMLInputElement>(null);
   const threadBottomRef = useRef<HTMLDivElement>(null);
   const activeThreadIdRef = useRef(activeThreadId);
 
@@ -374,6 +376,26 @@ export default function Home() {
     } finally {
       setIsTranslating(false);
     }
+  };
+
+  const handleOpenAslUploadPicker = () => {
+    if (isTrslWordMode || isTranslating) {
+      return;
+    }
+    aslVideoUploadInputRef.current?.click();
+  };
+
+  const handleAslVideoUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    event.target.value = "";
+    if (!selectedFile) {
+      return;
+    }
+    if (!selectedFile.type.startsWith("video/")) {
+      alert("Please choose a valid video file.");
+      return;
+    }
+    await handleSendVideo(selectedFile);
   };
 
   const handleTrslWordCaptureComplete = async (wordClips: Blob[]) => {
@@ -859,6 +881,13 @@ export default function Home() {
                             ref={sign2TextFocusRef}
                             className="rounded-2xl border border-[color:var(--border)] bg-slate-950/93 p-4 text-white"
                           >
+                            <input
+                              ref={aslVideoUploadInputRef}
+                              type="file"
+                              accept="video/mp4,video/webm,video/quicktime,video/*"
+                              className="hidden"
+                              onChange={handleAslVideoUpload}
+                            />
                             <div className="aspect-video rounded-xl border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.22),_rgba(15,23,42,0.86)_56%)] p-5">
                               <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                                 <Camera className="h-6 w-6 text-sky-300" />
@@ -879,9 +908,24 @@ export default function Home() {
                                   {isTrslWordMode ? "Start TRSL word capture" : "Open Camera"}
                                   <Video className="h-4 w-4" />
                                 </button>
+                                {!isTrslWordMode && targetLang === "ASL" && (
+                                  <button
+                                    onClick={handleOpenAslUploadPicker}
+                                    disabled={isTranslating}
+                                    className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-white/20 disabled:opacity-50"
+                                  >
+                                    Upload Video
+                                    <FileUp className="h-4 w-4" />
+                                  </button>
+                                )}
                                 {isTrslWordMode && (
                                   <p className="text-[11px] text-slate-300/90">
                                     One run can capture up to {TRSL_WORD_MAX_WORDS} words.
+                                  </p>
+                                )}
+                                {!isTrslWordMode && targetLang === "ASL" && (
+                                  <p className="text-[11px] text-slate-300/90">
+                                    You can record live or upload `.mp4`, `.webm`, or `.mov`.
                                   </p>
                                 )}
                               </div>
