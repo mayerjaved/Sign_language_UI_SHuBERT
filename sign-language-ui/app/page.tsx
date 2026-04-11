@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Camera,
@@ -32,11 +32,13 @@ import {
   TRSL_WORD_RECORDING_SECONDS,
 } from "@/lib/config";
 import { type Message, type SignLanguage } from "@/lib/types";
+import { WAITLIST_SIGN_LANGUAGES } from "@/data/signLanguages";
 
 type HomeTab = "sign2text" | "text2sign";
 type NavTab = "home" | "messages" | "learning";
 type ThemeMode = "light" | "dark";
 type SendMode = "avatar" | "text";
+type WaitlistStatusKind = "success" | "error";
 
 interface MessagingThread {
   id: string;
@@ -49,6 +51,9 @@ interface MessagingThread {
   incomingTranslation: string;
   messages: Message[];
 }
+
+const WAITLIST_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DEMO_VIDEO_EMBED_URL = "https://www.youtube.com/embed/7v4QswMwBuA";
 
 const makeSeedTime = (hour: number, minute: number): Date => {
   const stamp = new Date();
@@ -261,6 +266,13 @@ export default function Home() {
   const [homeAvatarVideoUrl, setHomeAvatarVideoUrl] = useState<string | null>(null);
   const [homeAvatarStatus, setHomeAvatarStatus] = useState<string | null>(null);
   const [homeAvatarError, setHomeAvatarError] = useState<string | null>(null);
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistLanguageName, setWaitlistLanguageName] = useState("");
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
+  const [waitlistStatus, setWaitlistStatus] = useState<{
+    kind: WaitlistStatusKind;
+    message: string;
+  } | null>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const sign2TextFocusRef = useRef<HTMLDivElement>(null);
   const text2SignFocusRef = useRef<HTMLDivElement>(null);
@@ -492,6 +504,77 @@ export default function Home() {
       setHomeAvatarError(detail);
     } finally {
       setIsGeneratingHomeAvatar(false);
+    }
+  };
+
+  const handleWaitlistSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedEmail = waitlistEmail.trim().toLowerCase();
+    const normalizedLanguageName = waitlistLanguageName.trim().toLowerCase();
+    const selectedLanguage = WAITLIST_SIGN_LANGUAGES.find(
+      (language) => language.name.toLowerCase() === normalizedLanguageName,
+    );
+
+    if (!WAITLIST_EMAIL_REGEX.test(normalizedEmail)) {
+      setWaitlistStatus({
+        kind: "error",
+        message: "Please enter a valid email address before joining.",
+      });
+      return;
+    }
+
+    if (!selectedLanguage) {
+      setWaitlistStatus({
+        kind: "error",
+        message: "Please choose a sign language from the dropdown list.",
+      });
+      return;
+    }
+
+    setIsSubmittingWaitlist(true);
+    setWaitlistStatus(null);
+
+    try {
+      const response = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          languageCode: selectedLanguage.code,
+          languageName: selectedLanguage.name,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            message?: string;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to save waitlist request right now.");
+      }
+
+      setWaitlistStatus({
+        kind: "success",
+        message:
+          payload?.message ||
+          `You're on the waitlist for ${selectedLanguage.name}. We'll reach out when it's ready.`,
+      });
+      setWaitlistEmail("");
+      setWaitlistLanguageName("");
+    } catch (error) {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : "Unable to save waitlist request right now. Please try again.";
+      setWaitlistStatus({ kind: "error", message: detail });
+    } finally {
+      setIsSubmittingWaitlist(false);
     }
   };
 
@@ -773,6 +856,113 @@ export default function Home() {
                         <Send className="h-4 w-4" />
                       </button>
                     </div>
+                  </div>
+
+                  <div className="mx-auto w-full max-w-4xl rounded-[26px] border border-[color:var(--border)] bg-[color:var(--surface)]/88 p-5 shadow-sm md:p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-[color:var(--ink)]">
+                          Project demo video
+                        </p>
+                        <p className="text-xs text-[color:var(--muted)]">
+                          Watch the product flow, then join the waitlist below.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-slate-950/90">
+                      <div className="aspect-video w-full">
+                        <iframe
+                          src={DEMO_VIDEO_EMBED_URL}
+                          title="Gesture Bridge demo video"
+                          className="h-full w-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+
+                    <a
+                      href="#waitlist-form"
+                      className="mt-3 inline-flex items-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ink)] transition-all hover:bg-[color:var(--surface-soft)]"
+                    >
+                      Join waitlist
+                    </a>
+
+                    <form
+                      id="waitlist-form"
+                      onSubmit={handleWaitlistSubmit}
+                      className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-4"
+                    >
+                      <p className="text-sm font-semibold text-[color:var(--ink)]">Join the waitlist</p>
+                      <p className="mt-1 text-xs text-[color:var(--muted)]">
+                        Select your preferred sign language from the searchable dropdown (
+                        {WAITLIST_SIGN_LANGUAGES.length} options).
+                      </p>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+                        <label className="text-xs font-medium text-[color:var(--muted)]">
+                          Email
+                          <input
+                            type="email"
+                            required
+                            autoComplete="email"
+                            value={waitlistEmail}
+                            onChange={(event) => {
+                              setWaitlistEmail(event.target.value);
+                              if (waitlistStatus) {
+                                setWaitlistStatus(null);
+                              }
+                            }}
+                            placeholder="you@example.com"
+                            className="mt-1.5 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--ink)] outline-none transition-all focus:border-blue-400/40 focus:ring-4 focus:ring-blue-200/30"
+                          />
+                        </label>
+
+                        <label className="text-xs font-medium text-[color:var(--muted)]">
+                          Sign language preference
+                          <input
+                            list="waitlist-sign-language-list"
+                            required
+                            value={waitlistLanguageName}
+                            onChange={(event) => {
+                              setWaitlistLanguageName(event.target.value);
+                              if (waitlistStatus) {
+                                setWaitlistStatus(null);
+                              }
+                            }}
+                            placeholder="Search and choose a sign language"
+                            className="mt-1.5 w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--ink)] outline-none transition-all focus:border-blue-400/40 focus:ring-4 focus:ring-blue-200/30"
+                          />
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmittingWaitlist}
+                          className="h-fit rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500 disabled:opacity-55 md:self-end"
+                        >
+                          {isSubmittingWaitlist ? "Saving..." : "Join Waitlist"}
+                        </button>
+                      </div>
+
+                      <datalist id="waitlist-sign-language-list">
+                        {WAITLIST_SIGN_LANGUAGES.map((language) => (
+                          <option key={language.code} value={language.name}>
+                            {language.code.toUpperCase()}
+                          </option>
+                        ))}
+                      </datalist>
+
+                      {waitlistStatus && (
+                        <p
+                          className={`mt-3 text-sm font-medium ${
+                            waitlistStatus.kind === "success" ? "text-emerald-600" : "text-rose-600"
+                          }`}
+                        >
+                          {waitlistStatus.message}
+                        </p>
+                      )}
+                    </form>
                   </div>
 
                   <div className="mx-auto w-full max-w-4xl rounded-[26px] border border-[color:var(--border)] bg-[color:var(--surface)]/88 p-5 shadow-sm md:p-6">
