@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
 
 interface WaitlistEntry {
   id: string;
@@ -12,11 +11,21 @@ interface WaitlistEntry {
 }
 
 const WAITLIST_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const WAITLIST_DIRECTORY_PATH = path.join(process.cwd(), "data");
-const WAITLIST_FILE_PATH = path.join(WAITLIST_DIRECTORY_PATH, "waitlist-submissions.json");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Initialize Redis client using either Vercel KV env vars or Upstash direct env vars
+const getRedisClient = () => {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) {
+    return null;
+  }
+  
+  return new Redis({ url, token });
+};
 
 const isWaitlistEntry = (value: unknown): value is WaitlistEntry => {
   if (typeof value !== "object" || value === null) {
@@ -33,32 +42,30 @@ const isWaitlistEntry = (value: unknown): value is WaitlistEntry => {
   );
 };
 
-const ensureWaitlistFile = async (): Promise<void> => {
-  await fs.mkdir(WAITLIST_DIRECTORY_PATH, { recursive: true });
-  try {
-    await fs.access(WAITLIST_FILE_PATH);
-  } catch {
-    await fs.writeFile(WAITLIST_FILE_PATH, "[]\n", "utf8");
-  }
-};
-
 const readWaitlistEntries = async (): Promise<WaitlistEntry[]> => {
-  await ensureWaitlistFile();
+  const redis = getRedisClient();
+  if (!redis) {
+    console.warn("[waitlist] Redis client not configured (Missing Vercel KV vars). Returning empty list.");
+    return [];
+  }
   try {
-    const content = await fs.readFile(WAITLIST_FILE_PATH, "utf8");
-    const parsed = JSON.parse(content) as unknown;
+    const parsed = await redis.get<unknown>("waitlist-submissions");
     if (!Array.isArray(parsed)) {
       return [];
     }
     return parsed.filter(isWaitlistEntry);
-  } catch {
+  } catch (error) {
+    console.error("[waitlist] failed to read from redis", error);
     return [];
   }
 };
 
 const writeWaitlistEntries = async (entries: WaitlistEntry[]): Promise<void> => {
-  await fs.mkdir(WAITLIST_DIRECTORY_PATH, { recursive: true });
-  await fs.writeFile(WAITLIST_FILE_PATH, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+  const redis = getRedisClient();
+  if (!redis) {
+    throw new Error("Redis client not configured. Cannot save waitlist entry.");
+  }
+  await redis.set("waitlist-submissions", entries);
 };
 
 export const GET = async (): Promise<NextResponse> => {
