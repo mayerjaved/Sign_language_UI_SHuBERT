@@ -17,8 +17,8 @@ export const dynamic = "force-dynamic";
 
 // Initialize Redis client using either Vercel KV env vars or Upstash direct env vars
 const getRedisClient = () => {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = process.env.waitlist_db_KV_REST_API_URL || process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.waitlist_db_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   
   if (!url || !token) {
     return null;
