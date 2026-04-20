@@ -17,6 +17,7 @@ import {
   Video,
 } from "lucide-react";
 import LanguageSelector from "@/components/LanguageSelector";
+import LearningHub from "@/components/LearningHub";
 import MessageBubble from "@/components/MessageBubble";
 import TrslWordRecorder from "@/components/TrslWordRecorder";
 import VideoRecorder from "@/components/VideoRecorder";
@@ -1435,13 +1436,7 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-5xl animate-rise rounded-[28px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] px-8 py-16 text-center shadow-[0_30px_80px_-55px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-              <p className="text-sm uppercase tracking-[0.2em] text-[color:var(--muted)]">Learning</p>
-              <p className="mt-3 text-lg font-semibold text-[color:var(--ink)]">Learning modules will live here.</p>
-              <p className="mt-2 text-sm text-[color:var(--muted)]">
-                Next phase can include tutorials, lessons, and confidence scores.
-              </p>
-            </div>
+            <LearningHub />
           )}
         </section>
 

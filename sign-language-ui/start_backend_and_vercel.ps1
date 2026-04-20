@@ -5,6 +5,7 @@
 param(
   [switch]$RestartBackend,
   [switch]$SkipTrslDocker,
+  [switch]$SkipLearningApi,
   [bool]$InlineBackendLogs = $true
 )
 
@@ -15,6 +16,7 @@ $repoRoot = Split-Path -Parent $uiDir
 $envFile = Join-Path $uiDir ".env.local"
 $backendDir = "C:\code_projects\SHuBERT_transferLearning\backEnd_API_signlanguage_UI"
 $mlRootDir = Split-Path -Parent $backendDir
+$learningDir = Join-Path $mlRootDir "learning_mode"
 
 function Show-DeploySourceNotice([string]$repoPath) {
   Write-Host "Note: Vercel deploy hooks redeploy code already pushed to Git; local files are not uploaded." -ForegroundColor Cyan
@@ -65,20 +67,24 @@ function Load-EnvFile([string]$path) {
   }
 }
 
-function Stop-BackendOnPort8000 {
-  $listening = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+function Stop-ProcessOnPort([int]$Port, [string]$Label = "service") {
+  $listening = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
   if (-not $listening) { return }
 
   $pids = $listening | Select-Object -ExpandProperty OwningProcess -Unique
   foreach ($procId in $pids) {
     try {
-      Write-Host "Stopping process on port 8000 (PID $procId)..." -ForegroundColor Yellow
+      Write-Host "Stopping $Label on port $Port (PID $procId)..." -ForegroundColor Yellow
       Stop-Process -Id $procId -Force -ErrorAction Stop
     } catch {
       Write-Host "Could not stop PID ${procId}: $($_.Exception.Message)" -ForegroundColor Yellow
     }
   }
   Start-Sleep -Seconds 1
+}
+
+function Stop-BackendOnPort8000 {
+  Stop-ProcessOnPort -Port 8000 -Label "backend API"
 }
 
 function Resolve-BackendPython([string]$PreferredVenvPython) {
@@ -272,7 +278,94 @@ function Start-TrslApiIfNeeded([switch]$Skip) {
   Write-Host "TRSL Docker API did not become healthy in time. TRSL requests may fail." -ForegroundColor Yellow
 }
 
-function Upsert-VercelEnv([string]$projectId, [string]$teamId, [string]$teamSlug, [string]$token, [string]$apiUrl) {
+function Test-LearningApiHealthy {
+  try {
+    $res = Invoke-RestMethod -Method Get -Uri "http://localhost:8002/api/learning/health" -TimeoutSec 4
+    if ($res.status -eq "ok") { return $true }
+    return $false
+  } catch {
+    return $false
+  }
+}
+
+function Start-LearningApiIfNeeded([switch]$ForceRestart, [switch]$Skip, [bool]$InlineLogs = $true) {
+  if ($Skip) {
+    Write-Host "Skipping Learning API startup (requested)." -ForegroundColor Yellow
+    return
+  }
+
+  if ($ForceRestart) {
+    Stop-ProcessOnPort -Port 8002 -Label "learning API"
+  }
+
+  if (Test-LearningApiHealthy) {
+    Write-Host "Learning API already healthy on http://localhost:8002." -ForegroundColor Green
+    return
+  }
+
+  $learningApiPath = Join-Path $learningDir "api.py"
+  if (!(Test-Path $learningApiPath)) {
+    throw "Learning API not found at $learningApiPath"
+  }
+
+  $venvPython = Join-Path $mlRootDir ".venv310\Scripts\python.exe"
+  $pythonConfig = Resolve-BackendPython -PreferredVenvPython $venvPython
+  $python = $pythonConfig.Path
+  $pythonPrefixArgs = @($pythonConfig.PrefixArgs)
+  $argList = @($pythonPrefixArgs + @("-m", "uvicorn", "learning_mode.api:app", "--host", "0.0.0.0", "--port", "8002"))
+
+  Write-Host ("Using learning Python: " + $python + " " + ($pythonPrefixArgs -join " ")) -ForegroundColor DarkGray
+  Write-Host "Starting Learning API on http://localhost:8002 ..." -ForegroundColor Cyan
+
+  $outLog = $null
+  $errLog = $null
+  if ($InlineLogs) {
+    Write-Host "Learning API logs will stream in this terminal (InlineBackendLogs=true)." -ForegroundColor DarkGray
+    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -NoNewWindow -PassThru
+  } else {
+    $outLog = Join-Path $env:TEMP ("learning-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
+    $errLog = Join-Path $env:TEMP ("learning-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
+    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+  }
+
+  for ($i = 0; $i -lt 60; $i++) {
+    Start-Sleep -Seconds 1
+    if (Test-LearningApiHealthy) {
+      Write-Host "Learning API is healthy on http://localhost:8002." -ForegroundColor Green
+      return
+    }
+  }
+
+  $stdoutTail = ""
+  $stderrTail = ""
+  if ($outLog -and (Test-Path $outLog)) {
+    $stdoutTail = (Get-Content -Path $outLog -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+  }
+  if ($errLog -and (Test-Path $errLog)) {
+    $stderrTail = (Get-Content -Path $errLog -Tail 20 -ErrorAction SilentlyContinue) -join "`n"
+  }
+  if ($stdoutTail) {
+    Write-Host "Learning API stdout tail:" -ForegroundColor Yellow
+    Write-Host $stdoutTail -ForegroundColor DarkYellow
+  }
+  if ($stderrTail) {
+    Write-Host "Learning API stderr tail:" -ForegroundColor Yellow
+    Write-Host $stderrTail -ForegroundColor DarkYellow
+  }
+  if ($outLog -or $errLog) {
+    throw "Learning API failed to start on port 8002. Process PID was $($proc.Id). Logs: $outLog ; $errLog"
+  }
+  throw "Learning API failed to start on port 8002. Process PID was $($proc.Id). Re-run with -InlineBackendLogs:`$false for captured temp logs."
+}
+
+function Upsert-VercelEnv(
+  [string]$projectId,
+  [string]$teamId,
+  [string]$teamSlug,
+  [string]$token,
+  [string]$envKey,
+  [string]$envValue
+) {
   # Vercel env upsert endpoint is in v10.
   $base = "https://api.vercel.com/v10/projects/$projectId/env?upsert=true"
   if ($teamId) {
@@ -287,13 +380,13 @@ function Upsert-VercelEnv([string]$projectId, [string]$teamId, [string]$teamSlug
   }
 
   $body = @{
-    key = "NEXT_PUBLIC_API_URL"
-    value = $apiUrl
+    key = $envKey
+    value = $envValue
     type = "encrypted"
     target = @("production", "preview", "development")
   } | ConvertTo-Json
 
-  Write-Host "Updating Vercel env NEXT_PUBLIC_API_URL ..." -ForegroundColor Cyan
+  Write-Host "Updating Vercel env $envKey ..." -ForegroundColor Cyan
   try {
     Invoke-RestMethod -Method Post -Uri $base -Headers $headers -Body $body | Out-Null
   } catch {
@@ -318,7 +411,8 @@ function Upsert-VercelEnvBestEffort(
   [string]$teamId,
   [string]$teamSlug,
   [string]$token,
-  [string]$apiUrl
+  [string]$envKey,
+  [string]$envValue
 ) {
   $attempts = @()
   if ($projectId) {
@@ -342,14 +436,14 @@ function Upsert-VercelEnvBestEffort(
     $seen[$key] = $true
 
     try {
-      Upsert-VercelEnv -projectId $idOrName -teamId $scope -teamSlug $scopeSlug -token $token -apiUrl $apiUrl
+      Upsert-VercelEnv -projectId $idOrName -teamId $scope -teamSlug $scopeSlug -token $token -envKey $envKey -envValue $envValue
       return @{ idOrName = $idOrName; teamId = $scope; teamSlug = $scopeSlug }
     } catch {
       Write-Host "Upsert failed for '$idOrName' with teamId '$scope' and slug '$scopeSlug'." -ForegroundColor Yellow
     }
   }
 
-  throw "Unable to update NEXT_PUBLIC_API_URL using any configured project/team scope. Verify VERCEL_PROJECT_ID / VERCEL_PROJECT_NAME and team access."
+  throw "Unable to update $envKey using any configured project/team scope. Verify VERCEL_PROJECT_ID / VERCEL_PROJECT_NAME and team access."
 }
 
 function Invoke-VercelGet([string]$uri, [hashtable]$headers) {
@@ -473,17 +567,22 @@ if (-not (Test-VercelAuth -token $env:VERCEL_TOKEN)) {
 
 Start-BackendIfNeeded -ForceRestart:$RestartBackend -InlineLogs:$InlineBackendLogs
 Start-TrslApiIfNeeded -Skip:$SkipTrslDocker
+Start-LearningApiIfNeeded -ForceRestart:$RestartBackend -Skip:$SkipLearningApi -InlineLogs:$InlineBackendLogs
 $tunnelUrl = Start-QuickTunnelAndGetUrl
 Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green
 
 try {
-  $resolved = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -apiUrl $tunnelUrl
-  Write-Host "Updated NEXT_PUBLIC_API_URL for project '$($resolved.idOrName)' (teamId '$($resolved.teamId)', slug '$($resolved.teamSlug)')." -ForegroundColor Green
+  $resolvedApi = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -envKey "NEXT_PUBLIC_API_URL" -envValue $tunnelUrl
+  Write-Host "Updated NEXT_PUBLIC_API_URL for project '$($resolvedApi.idOrName)' (teamId '$($resolvedApi.teamId)', slug '$($resolvedApi.teamSlug)')." -ForegroundColor Green
+
+  $resolvedLearning = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -envKey "NEXT_PUBLIC_LEARNING_API_URL" -envValue $tunnelUrl
+  Write-Host "Updated NEXT_PUBLIC_LEARNING_API_URL for project '$($resolvedLearning.idOrName)' (teamId '$($resolvedLearning.teamId)', slug '$($resolvedLearning.teamSlug)')." -ForegroundColor Green
+
   Trigger-VercelDeploy -hookUrl $env:VERCEL_DEPLOY_HOOK_URL
   Write-Host "Done. The UI should be live once the deploy finishes." -ForegroundColor Green
 } catch {
-  Write-Host "Vercel update failed. Backend + tunnel are running." -ForegroundColor Yellow
-  Write-Host "Manual step: set NEXT_PUBLIC_API_URL in Vercel to $tunnelUrl and redeploy." -ForegroundColor Yellow
+  Write-Host "Vercel env update failed. Backend + tunnel are running." -ForegroundColor Yellow
+  Write-Host "Manual step: set NEXT_PUBLIC_API_URL and NEXT_PUBLIC_LEARNING_API_URL in Vercel to $tunnelUrl and redeploy." -ForegroundColor Yellow
   if ($env:VERCEL_DEPLOY_HOOK_URL) {
     Write-Host "Deploy hook is set, but env update failed; redeploy manually after updating the env var." -ForegroundColor Yellow
   }
