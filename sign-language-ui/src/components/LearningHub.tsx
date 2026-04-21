@@ -35,6 +35,13 @@ import { TRSL_WORD_PAUSE_SECONDS, TRSL_WORD_RECORDING_SECONDS } from "@/lib/conf
 
 type LearningPhase = "welcome" | "demo" | "recording" | "scoring" | "result";
 type AttemptConfirmation = "yes" | "no" | null;
+type LearningLanguage = "TRSL" | "ASL" | "PSL";
+
+interface LearningLanguageOption {
+    id: LearningLanguage;
+    label: string;
+    available: boolean;
+}
 
 interface WordMastery {
     attempts: number;
@@ -54,6 +61,11 @@ interface LocalProgress {
 
 const USER_STORAGE_KEY = "slai-learning-user-id-v1";
 const PROGRESS_STORAGE_KEY = "slai-learning-progress-v1";
+const LEARNING_LANGUAGE_OPTIONS: LearningLanguageOption[] = [
+    { id: "TRSL", label: "Turkish Sign Language (TRSL)", available: true },
+    { id: "ASL", label: "American Sign Language (ASL)", available: false },
+    { id: "PSL", label: "Pakistani Sign Language (PSL)", available: false },
+];
 
 const DEFAULT_PROGRESS: LocalProgress = {
     xp: 0,
@@ -103,6 +115,7 @@ function fallbackChallenge(word: string): LearningWordChallenge {
 }
 
 export default function LearningHub() {
+    const [selectedLanguage, setSelectedLanguage] = useState<LearningLanguage>("TRSL");
     const [phase, setPhase] = useState<LearningPhase>("welcome");
     const [words, setWords] = useState<string[]>([]);
     const [wordSearch, setWordSearch] = useState("");
@@ -120,6 +133,10 @@ export default function LearningHub() {
     const [attemptVideoUrl, setAttemptVideoUrl] = useState<string | null>(null);
     const [lastRoundXp, setLastRoundXp] = useState(0);
     const [attemptConfirmation, setAttemptConfirmation] = useState<AttemptConfirmation>(null);
+    const activeLanguageOption = LEARNING_LANGUAGE_OPTIONS.find(
+        (option) => option.id === selectedLanguage,
+    )!;
+    const isLearningLanguageAvailable = activeLanguageOption.available;
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -243,6 +260,12 @@ export default function LearningHub() {
     };
 
     const handleRandomChallenge = async () => {
+        if (!isLearningLanguageAvailable) {
+            setErrorMessage(
+                `${activeLanguageOption.label} is coming soon. Please switch to TRSL for now.`,
+            );
+            return;
+        }
         setIsLoadingChallenge(true);
         setErrorMessage(null);
         try {
@@ -263,6 +286,12 @@ export default function LearningHub() {
     };
 
     const handleWordSelect = async (word: string) => {
+        if (!isLearningLanguageAvailable) {
+            setErrorMessage(
+                `${activeLanguageOption.label} is coming soon. Please switch to TRSL for now.`,
+            );
+            return;
+        }
         setIsLoadingChallenge(true);
         setErrorMessage(null);
         try {
@@ -326,6 +355,13 @@ export default function LearningHub() {
     };
 
     const handleCaptureComplete = async (wordClips: Blob[]) => {
+        if (!isLearningLanguageAvailable) {
+            setErrorMessage(
+                `${activeLanguageOption.label} is coming soon. Please switch to TRSL for now.`,
+            );
+            setPhase("demo");
+            return;
+        }
         if (!challenge || wordClips.length === 0) {
             setPhase("demo");
             return;
@@ -416,10 +452,34 @@ export default function LearningHub() {
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-end gap-2">
+                        <label className="flex min-w-[220px] flex-col gap-1 rounded-2xl border border-slate-900/10 bg-white/70 px-3 py-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-600">
+                                Learning Language
+                            </span>
+                            <select
+                                value={selectedLanguage}
+                                onChange={(event) => {
+                                    setSelectedLanguage(event.target.value as LearningLanguage);
+                                    setErrorMessage(null);
+                                }}
+                                className="bg-transparent text-sm font-semibold text-slate-900 outline-none"
+                            >
+                                {LEARNING_LANGUAGE_OPTIONS.map((option) => (
+                                    <option
+                                        key={option.id}
+                                        value={option.id}
+                                        disabled={!option.available}
+                                    >
+                                        {option.label}
+                                        {option.available ? "" : " (Coming soon)"}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
                         <button
                             onClick={() => void handleRandomChallenge()}
-                            disabled={isLoadingChallenge}
+                            disabled={isLoadingChallenge || !isLearningLanguageAvailable}
                             className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                         >
                             {isLoadingChallenge ? (
@@ -487,6 +547,9 @@ export default function LearningHub() {
                             </p>
                             <p className="mt-1 text-base font-semibold text-[color:var(--ink)]">
                                 {challenge ? `Target Word: ${toPrettyWord(challenge.word)}` : "Pick a word to begin"}
+                            </p>
+                            <p className="mt-1 text-xs text-[color:var(--muted)]">
+                                Language: {activeLanguageOption.id}
                             </p>
                         </div>
                         {challenge && (
@@ -563,7 +626,7 @@ export default function LearningHub() {
                             </div>
                             <button
                                 onClick={() => void handleRandomChallenge()}
-                                disabled={isLoadingChallenge}
+                                disabled={isLoadingChallenge || !isLearningLanguageAvailable}
                                 className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                             >
                                 <Play className="h-4 w-4" />
@@ -616,17 +679,12 @@ export default function LearningHub() {
                                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--muted)]">
                                         Alternate Clips
                                     </p>
-                                    <div className="mt-2 flex flex-wrap gap-2">
+                                    <div className="mt-2 text-sm text-[color:var(--ink)]">
                                         {challenge.reference_clips.length > 0 ? (
-                                            challenge.reference_clips.map((clip) => (
-                                                <span
-                                                    key={clip.filename}
-                                                    className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-medium text-cyan-800"
-                                                >
-                                                    {clip.is_medoid ? "Core: " : ""}
-                                                    {clip.filename.replace(".pt", "")}
-                                                </span>
-                                            ))
+                                            <p>
+                                                {challenge.reference_clips.length} reference variations are available
+                                                for this word.
+                                            </p>
                                         ) : (
                                             <span className="text-sm text-[color:var(--muted)]">
                                                 Demo clip loaded. Backend references can appear here.
@@ -742,14 +800,6 @@ export default function LearningHub() {
                                             <p key={`${index}-${hint}`}>- {hint}</p>
                                         ))}
                                     </div>
-                                    {result.feedback.nearest_match?.filename && (
-                                        <p className="mt-3 text-xs text-[color:var(--muted)]">
-                                            Closest reference:{" "}
-                                            <span className="font-semibold text-[color:var(--ink)]">
-                                                {result.feedback.nearest_match.filename.replace(".pt", "")}
-                                            </span>
-                                        </p>
-                                    )}
                                 </div>
 
                                 <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-3">
@@ -956,14 +1006,15 @@ export default function LearningHub() {
 
                     <div className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_26px_70px_-54px_rgba(15,23,42,0.5)] backdrop-blur-xl">
                         <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                            Recommended Next
+                            Quick Picks
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">
                             {recommendedWords.map((word) => (
                                 <button
                                     key={word}
                                     onClick={() => void handleWordSelect(word)}
-                                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition-all hover:bg-amber-100"
+                                    disabled={!isLearningLanguageAvailable}
+                                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition-all hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {toPrettyWord(word)}
                                 </button>

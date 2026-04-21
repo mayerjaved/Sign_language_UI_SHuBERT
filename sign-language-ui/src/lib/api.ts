@@ -214,11 +214,19 @@ function normalizeReferenceVideoUrl(pathOrUrl: unknown): string | null {
     if (/^https?:\/\//i.test(raw)) {
         return raw;
     }
-    if (/^[A-Za-z]:\\/.test(raw)) {
-        return null;
+    if (raw.startsWith("/demo/")) {
+        return raw;
+    }
+    if (/^[A-Za-z]:\\/.test(raw) || raw.startsWith("\\\\")) {
+        const encodedPath = encodeURIComponent(raw);
+        return `${LEARNING_API_BASE}/api/learning/reference-video?path=${encodedPath}`;
     }
     if (raw.startsWith("/")) {
         return toAbsoluteApiUrl(raw, LEARNING_API_BASE);
+    }
+    if (/\.(mp4|webm|mov)$/i.test(raw)) {
+        const encodedPath = encodeURIComponent(raw);
+        return `${LEARNING_API_BASE}/api/learning/reference-video?path=${encodedPath}`;
     }
     return null;
 }
