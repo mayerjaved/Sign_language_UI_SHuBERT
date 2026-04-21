@@ -38,6 +38,7 @@ yarn-error.log*
 
 # local data
 /data/waitlist-submissions.json
+/logs/
 
 # typescript
 *.tsbuildinfo

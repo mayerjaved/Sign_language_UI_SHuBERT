@@ -14,9 +14,23 @@ $ErrorActionPreference = "Stop"
 $uiDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $uiDir
 $envFile = Join-Path $uiDir ".env.local"
+$logsDir = Join-Path $uiDir "logs"
 $backendDir = "C:\code_projects\SHuBERT_transferLearning\backEnd_API_signlanguage_UI"
 $mlRootDir = Split-Path -Parent $backendDir
 $learningDir = Join-Path $mlRootDir "learning_mode"
+
+if (!(Test-Path $logsDir)) {
+  New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+}
+Write-Host "Run logs directory: $logsDir" -ForegroundColor DarkGray
+
+function Get-LatestLogPath([string]$Pattern) {
+  $latest = Get-ChildItem -Path $logsDir -Filter $Pattern -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+  if ($latest) { return $latest.FullName }
+  return $null
+}
 
 function Show-DeploySourceNotice([string]$repoPath) {
   Write-Host "Note: Vercel deploy hooks redeploy code already pushed to Git; local files are not uploaded." -ForegroundColor Cyan
@@ -139,6 +153,10 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
   if ($listening) {
     Write-Host "Backend already listening on port 8000." -ForegroundColor Green
     Write-Host "Backend process already existed before this run, so no new stdout/stderr log files were created by this script." -ForegroundColor DarkGray
+    $latestBackendOut = Get-LatestLogPath -Pattern "backend-api-*.out.log"
+    $latestBackendErr = Get-LatestLogPath -Pattern "backend-api-*.err.log"
+    if ($latestBackendOut) { Write-Host "Latest backend stdout log: $latestBackendOut" -ForegroundColor DarkGray }
+    if ($latestBackendErr) { Write-Host "Latest backend stderr log: $latestBackendErr" -ForegroundColor DarkGray }
     return
   }
 
@@ -161,8 +179,9 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
     Write-Host "Backend logs will stream in this terminal (InlineBackendLogs=true)." -ForegroundColor DarkGray
     $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -NoNewWindow -PassThru
   } else {
-    $outLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
-    $errLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $outLog = Join-Path $logsDir ("backend-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
+    $errLog = Join-Path $logsDir ("backend-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
     $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
     Write-Host "Backend stdout log: $outLog" -ForegroundColor DarkGray
     Write-Host "Backend stderr log: $errLog" -ForegroundColor DarkGray
@@ -205,11 +224,12 @@ function Get-CloudflaredPath {
 function Start-QuickTunnelAndGetUrl {
   $cloudflared = Get-CloudflaredPath
   # Use unique log files so parallel/previous runs don't collide.
-  $log = Join-Path $env:TEMP ("cloudflared-quick-" + ([Guid]::NewGuid().ToString("N")) + ".log")
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $log = Join-Path $logsDir ("cloudflared-quick-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".log")
 
   Write-Host "Starting Cloudflare Quick Tunnel for http://localhost:8000 ..." -ForegroundColor Cyan
   # PowerShell requires different files for stdout/stderr redirection.
-  $errLog = Join-Path $env:TEMP ("cloudflared-quick-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
+  $errLog = Join-Path $logsDir ("cloudflared-quick-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
   Start-Process -FilePath $cloudflared -ArgumentList "tunnel --url http://localhost:8000" -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru | Out-Null
   Write-Host "Cloudflared stdout log: $log" -ForegroundColor DarkGray
   Write-Host "Cloudflared stderr log: $errLog" -ForegroundColor DarkGray
@@ -306,6 +326,10 @@ function Start-LearningApiIfNeeded([switch]$ForceRestart, [switch]$Skip, [bool]$
   if (Test-LearningApiHealthy) {
     Write-Host "Learning API already healthy on http://localhost:8002." -ForegroundColor Green
     Write-Host "Learning API process already existed before this run, so no new stdout/stderr log files were created by this script." -ForegroundColor DarkGray
+    $latestLearningOut = Get-LatestLogPath -Pattern "learning-api-*.out.log"
+    $latestLearningErr = Get-LatestLogPath -Pattern "learning-api-*.err.log"
+    if ($latestLearningOut) { Write-Host "Latest learning stdout log: $latestLearningOut" -ForegroundColor DarkGray }
+    if ($latestLearningErr) { Write-Host "Latest learning stderr log: $latestLearningErr" -ForegroundColor DarkGray }
     return
   }
 
@@ -329,8 +353,9 @@ function Start-LearningApiIfNeeded([switch]$ForceRestart, [switch]$Skip, [bool]$
     Write-Host "Learning API logs will stream in this terminal (InlineBackendLogs=true)." -ForegroundColor DarkGray
     $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -NoNewWindow -PassThru
   } else {
-    $outLog = Join-Path $env:TEMP ("learning-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
-    $errLog = Join-Path $env:TEMP ("learning-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
+    $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $outLog = Join-Path $logsDir ("learning-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
+    $errLog = Join-Path $logsDir ("learning-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
     $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
     Write-Host "Learning API stdout log: $outLog" -ForegroundColor DarkGray
     Write-Host "Learning API stderr log: $errLog" -ForegroundColor DarkGray
