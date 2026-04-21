@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import {
     ArrowRight,
     Camera,
@@ -105,6 +105,14 @@ function toPrettyWord(word: string): string {
         .join(" ");
 }
 
+function getMediaErrorLabel(code: number | undefined): string {
+    if (code === 1) return "MEDIA_ERR_ABORTED";
+    if (code === 2) return "MEDIA_ERR_NETWORK";
+    if (code === 3) return "MEDIA_ERR_DECODE";
+    if (code === 4) return "MEDIA_ERR_SRC_NOT_SUPPORTED";
+    return "UNKNOWN_MEDIA_ERR";
+}
+
 function fallbackChallenge(word: string): LearningWordChallenge {
     return {
         word,
@@ -140,6 +148,7 @@ export default function LearningHub() {
     const [attemptConfirmation, setAttemptConfirmation] = useState<AttemptConfirmation>(null);
     const [referenceVideoSrc, setReferenceVideoSrc] = useState<string | null>(null);
     const [referenceVideoFallbackUsed, setReferenceVideoFallbackUsed] = useState(false);
+    const [referenceVideoDebug, setReferenceVideoDebug] = useState<string | null>(null);
     const activeLanguageOption = LEARNING_LANGUAGE_OPTIONS.find(
         (option) => option.id === selectedLanguage,
     )!;
@@ -257,10 +266,12 @@ export default function LearningHub() {
         if (!challenge?.reference_video) {
             setReferenceVideoSrc(null);
             setReferenceVideoFallbackUsed(false);
+            setReferenceVideoDebug(null);
             return;
         }
         setReferenceVideoSrc(challenge.reference_video);
         setReferenceVideoFallbackUsed(false);
+        setReferenceVideoDebug(null);
     }, [challenge]);
 
     const filteredWords = useMemo(() => {
@@ -305,9 +316,30 @@ export default function LearningHub() {
         setPhase("demo");
     };
 
-    const handleReferenceVideoError = () => {
+    const handleReferenceVideoLoaded = () => {
+        setReferenceVideoDebug(null);
+    };
+
+    const handleReferenceVideoError = (event: SyntheticEvent<HTMLVideoElement, Event>) => {
+        const videoElement = event.currentTarget;
+        const errorCode = videoElement.error?.code;
+        const attemptedSrc = videoElement.currentSrc || referenceVideoSrc || "unknown";
+        const debugText = `src=${attemptedSrc} error=${getMediaErrorLabel(
+            errorCode,
+        )} networkState=${videoElement.networkState} readyState=${videoElement.readyState}`;
+        setReferenceVideoDebug(debugText);
+        console.error("[Learning] Reference video failed to load.", {
+            attemptedSrc,
+            errorCode,
+            errorLabel: getMediaErrorLabel(errorCode),
+            networkState: videoElement.networkState,
+            readyState: videoElement.readyState,
+        });
+
         if (referenceVideoSrc === "/demo/trsl-message.mp4") {
-            setErrorMessage("Reference clip could not be loaded. Please start a new round.");
+            setErrorMessage(
+                "Reference clip could not be loaded. Please start a new round. See Video debug details below.",
+            );
             return;
         }
         setReferenceVideoSrc("/demo/trsl-message.mp4");
@@ -673,6 +705,11 @@ export default function LearningHub() {
                             {errorMessage}
                         </p>
                     )}
+                    {referenceVideoDebug && (
+                        <p className="mt-3 break-all rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 font-mono text-xs text-amber-900">
+                            Video debug: {referenceVideoDebug}
+                        </p>
+                    )}
                     {learningBackendState !== "online" && (
                         <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                             Learning backend is not fully reachable. Video and scoring may fail.
@@ -750,6 +787,7 @@ export default function LearningHub() {
                                         src={referenceVideoSrc}
                                         controls
                                         playsInline
+                                        onLoadedData={handleReferenceVideoLoaded}
                                         onError={handleReferenceVideoError}
                                         className="mt-3 w-full rounded-xl border border-white/20"
                                     />
@@ -932,6 +970,7 @@ export default function LearningHub() {
                                             src={referenceVideoSrc}
                                             controls
                                             playsInline
+                                            onLoadedData={handleReferenceVideoLoaded}
                                             onError={handleReferenceVideoError}
                                             className="w-full rounded-xl border border-[color:var(--border)]"
                                         />

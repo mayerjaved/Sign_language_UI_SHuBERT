@@ -138,6 +138,7 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
   $listening = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
   if ($listening) {
     Write-Host "Backend already listening on port 8000." -ForegroundColor Green
+    Write-Host "Backend process already existed before this run, so no new stdout/stderr log files were created by this script." -ForegroundColor DarkGray
     return
   }
 
@@ -163,6 +164,8 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
     $outLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
     $errLog = Join-Path $env:TEMP ("backend-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
     $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+    Write-Host "Backend stdout log: $outLog" -ForegroundColor DarkGray
+    Write-Host "Backend stderr log: $errLog" -ForegroundColor DarkGray
   }
   Start-Sleep -Seconds 2
 
@@ -208,6 +211,8 @@ function Start-QuickTunnelAndGetUrl {
   # PowerShell requires different files for stdout/stderr redirection.
   $errLog = Join-Path $env:TEMP ("cloudflared-quick-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
   Start-Process -FilePath $cloudflared -ArgumentList "tunnel --url http://localhost:8000" -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru | Out-Null
+  Write-Host "Cloudflared stdout log: $log" -ForegroundColor DarkGray
+  Write-Host "Cloudflared stderr log: $errLog" -ForegroundColor DarkGray
 
   $tunnelUrl = $null
   for ($i = 0; $i -lt 90; $i++) {
@@ -300,6 +305,7 @@ function Start-LearningApiIfNeeded([switch]$ForceRestart, [switch]$Skip, [bool]$
 
   if (Test-LearningApiHealthy) {
     Write-Host "Learning API already healthy on http://localhost:8002." -ForegroundColor Green
+    Write-Host "Learning API process already existed before this run, so no new stdout/stderr log files were created by this script." -ForegroundColor DarkGray
     return
   }
 
@@ -326,6 +332,8 @@ function Start-LearningApiIfNeeded([switch]$ForceRestart, [switch]$Skip, [bool]$
     $outLog = Join-Path $env:TEMP ("learning-api-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
     $errLog = Join-Path $env:TEMP ("learning-api-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
     $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+    Write-Host "Learning API stdout log: $outLog" -ForegroundColor DarkGray
+    Write-Host "Learning API stderr log: $errLog" -ForegroundColor DarkGray
   }
 
   for ($i = 0; $i -lt 60; $i++) {
