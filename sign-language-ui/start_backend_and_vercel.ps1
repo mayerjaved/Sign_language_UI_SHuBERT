@@ -6,7 +6,7 @@ param(
   [switch]$RestartBackend,
   [switch]$SkipTrslDocker,
   [switch]$SkipLearningApi,
-  [bool]$InlineBackendLogs = $true
+  [bool]$InlineBackendLogs = $false
 )
 
 $ErrorActionPreference = "Stop"

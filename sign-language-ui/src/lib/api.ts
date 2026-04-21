@@ -90,6 +90,12 @@ export interface LearningStats {
     recent_words: string[];
 }
 
+export interface LearningHealth {
+    status: "ok" | "error";
+    words_available?: number;
+    detail?: string;
+}
+
 const FALLBACK_LEARNING_WORDS = [
     "hello",
     "thanks",
@@ -404,6 +410,30 @@ export async function getLearningWords(): Promise<string[]> {
         return words.length > 0 ? words : FALLBACK_LEARNING_WORDS;
     } catch {
         return FALLBACK_LEARNING_WORDS;
+    }
+}
+
+export async function getLearningHealth(): Promise<LearningHealth> {
+    try {
+        const res = await fetch(`${LEARNING_API_BASE}/api/learning/health`, {
+            cache: "no-store",
+        });
+        if (!res.ok) {
+            throw new Error(await readErrorDetail(res));
+        }
+        const payload = (await res.json()) as Record<string, unknown>;
+        const status = asString(payload.status, "ok").toLowerCase() === "ok" ? "ok" : "error";
+        const wordsAvailable = asNumber(payload.words_available, NaN);
+        return {
+            status,
+            words_available: Number.isFinite(wordsAvailable) ? wordsAvailable : undefined,
+            detail: status === "error" ? asString(payload.detail) || undefined : undefined,
+        };
+    } catch (error) {
+        return {
+            status: "error",
+            detail: error instanceof Error ? error.message : "Learning API is unavailable.",
+        };
     }
 }
 

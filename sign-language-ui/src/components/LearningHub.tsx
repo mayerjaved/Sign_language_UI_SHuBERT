@@ -23,6 +23,7 @@ import {
 import TrslWordRecorder from "@/components/TrslWordRecorder";
 import {
     confirmLearningAttempt,
+    getLearningHealth,
     getLearningNextWord,
     getLearningStats,
     getLearningWord,
@@ -129,10 +130,16 @@ export default function LearningHub() {
     const [userId, setUserId] = useState("anonymous");
     const [serverAttemptCount, setServerAttemptCount] = useState(0);
     const [serverAverageScore, setServerAverageScore] = useState(0);
+    const [learningBackendState, setLearningBackendState] = useState<"checking" | "online" | "offline">(
+        "checking",
+    );
+    const [learningBackendDetail, setLearningBackendDetail] = useState<string | null>(null);
     const [progress, setProgress] = useState<LocalProgress>(DEFAULT_PROGRESS);
     const [attemptVideoUrl, setAttemptVideoUrl] = useState<string | null>(null);
     const [lastRoundXp, setLastRoundXp] = useState(0);
     const [attemptConfirmation, setAttemptConfirmation] = useState<AttemptConfirmation>(null);
+    const [referenceVideoSrc, setReferenceVideoSrc] = useState<string | null>(null);
+    const [referenceVideoFallbackUsed, setReferenceVideoFallbackUsed] = useState(false);
     const activeLanguageOption = LEARNING_LANGUAGE_OPTIONS.find(
         (option) => option.id === selectedLanguage,
     )!;
@@ -193,6 +200,35 @@ export default function LearningHub() {
 
     useEffect(() => {
         let isMounted = true;
+        const checkLearningBackend = async () => {
+            const health = await getLearningHealth();
+            if (!isMounted) return;
+            if (health.status === "ok") {
+                setLearningBackendState("online");
+                setLearningBackendDetail(
+                    typeof health.words_available === "number"
+                        ? `${health.words_available} words indexed`
+                        : null,
+                );
+            } else {
+                setLearningBackendState("offline");
+                setLearningBackendDetail(health.detail ?? "Learning backend is unavailable.");
+            }
+        };
+
+        void checkLearningBackend();
+        const intervalId = window.setInterval(() => {
+            void checkLearningBackend();
+        }, 30000);
+
+        return () => {
+            isMounted = false;
+            window.clearInterval(intervalId);
+        };
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
         const loadStats = async () => {
             const stats = await getLearningStats(userId);
             if (!isMounted) return;
@@ -216,6 +252,16 @@ export default function LearningHub() {
             }
         };
     }, [attemptVideoUrl]);
+
+    useEffect(() => {
+        if (!challenge?.reference_video) {
+            setReferenceVideoSrc(null);
+            setReferenceVideoFallbackUsed(false);
+            return;
+        }
+        setReferenceVideoSrc(challenge.reference_video);
+        setReferenceVideoFallbackUsed(false);
+    }, [challenge]);
 
     const filteredWords = useMemo(() => {
         const query = wordSearch.trim().toLowerCase();
@@ -257,6 +303,16 @@ export default function LearningHub() {
         setLastRoundXp(0);
         setErrorMessage(null);
         setPhase("demo");
+    };
+
+    const handleReferenceVideoError = () => {
+        if (referenceVideoSrc === "/demo/trsl-message.mp4") {
+            setErrorMessage("Reference clip could not be loaded. Please start a new round.");
+            return;
+        }
+        setReferenceVideoSrc("/demo/trsl-message.mp4");
+        setReferenceVideoFallbackUsed(true);
+        setErrorMessage("Reference stream was unavailable. Showing fallback demo clip.");
     };
 
     const handleRandomChallenge = async () => {
@@ -551,6 +607,24 @@ export default function LearningHub() {
                             <p className="mt-1 text-xs text-[color:var(--muted)]">
                                 Language: {activeLanguageOption.id}
                             </p>
+                            <p className="mt-1 text-xs text-[color:var(--muted)]">
+                                Engine:{" "}
+                                <span
+                                    className={
+                                        learningBackendState === "online"
+                                            ? "font-semibold text-emerald-600"
+                                            : learningBackendState === "checking"
+                                              ? "font-semibold text-amber-600"
+                                              : "font-semibold text-rose-600"
+                                    }
+                                >
+                                    {learningBackendState === "online"
+                                        ? "Online"
+                                        : learningBackendState === "checking"
+                                          ? "Checking..."
+                                          : "Offline"}
+                                </span>
+                            </p>
                         </div>
                         {challenge && (
                             <span className="rounded-full border border-cyan-200/75 bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-800">
@@ -597,6 +671,12 @@ export default function LearningHub() {
                     {errorMessage && (
                         <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                             {errorMessage}
+                        </p>
+                    )}
+                    {learningBackendState !== "online" && (
+                        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            Learning backend is not fully reachable. Video and scoring may fail.
+                            {learningBackendDetail ? ` (${learningBackendDetail})` : ""}
                         </p>
                     )}
 
@@ -665,12 +745,19 @@ export default function LearningHub() {
                                     </button>
                                 </div>
 
-                                {challenge.reference_video && (
+                                {referenceVideoSrc && (
                                     <video
-                                        src={challenge.reference_video}
+                                        src={referenceVideoSrc}
                                         controls
+                                        playsInline
+                                        onError={handleReferenceVideoError}
                                         className="mt-3 w-full rounded-xl border border-white/20"
                                     />
+                                )}
+                                {referenceVideoFallbackUsed && (
+                                    <p className="mt-2 text-xs text-cyan-100">
+                                        Fallback demo clip is shown because live reference streaming failed.
+                                    </p>
                                 )}
                             </div>
 
@@ -836,14 +923,16 @@ export default function LearningHub() {
                             </div>
 
                             <div className="grid gap-3 md:grid-cols-2">
-                                {challenge.reference_video && (
+                                {referenceVideoSrc && (
                                     <div>
                                         <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">
                                             Reference
                                         </p>
                                         <video
-                                            src={challenge.reference_video}
+                                            src={referenceVideoSrc}
                                             controls
+                                            playsInline
+                                            onError={handleReferenceVideoError}
                                             className="w-full rounded-xl border border-[color:var(--border)]"
                                         />
                                     </div>
