@@ -7,6 +7,17 @@ powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_full_stack.ps1
 powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_full_stack.ps1 -ForceTrslRebuild
 
 
+logging:
+# Latest backend stderr
+Get-ChildItem $env:TEMP -Filter "backend-api-*.err.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | % { Get-Content $_.FullName -Tail 120 }
+
+# Latest learning stderr
+Get-ChildItem $env:TEMP -Filter "learning-api-*.err.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | % { Get-Content $_.FullName -Tail 120 }
+
+# Latest cloudflared stderr
+Get-ChildItem $env:TEMP -Filter "cloudflared-quick-*.err.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | % { Get-Content $_.FullName -Tail 120 }
+
+
 # 2-Way Sign Language Translation App — Full Architecture Plan
 
 > **Purpose**: This document is a comprehensive, developer-handoff-ready specification for building and locally deploying a 2-Way Sign Language Translation web application. It is designed to be given to a frontend developer, a backend developer, or another AI assistant with no prior context on this project.
