@@ -101,6 +101,16 @@ function Stop-BackendOnPort8000 {
   Stop-ProcessOnPort -Port 8000 -Label "backend API"
 }
 
+function Test-BackendHealthy {
+  try {
+    $res = Invoke-RestMethod -Method Get -Uri "http://localhost:8000/health" -TimeoutSec 4
+    if ($res.status -eq "ok") { return $true }
+    return $false
+  } catch {
+    return $false
+  }
+}
+
 function Resolve-BackendPython([string]$PreferredVenvPython) {
   $candidates = @()
   if ($env:BACKEND_PYTHON) {
@@ -149,15 +159,20 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
     Stop-BackendOnPort8000
   }
 
-  $listening = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
-  if ($listening) {
-    Write-Host "Backend already listening on port 8000." -ForegroundColor Green
+  if (Test-BackendHealthy) {
+    Write-Host "Backend API already healthy on http://localhost:8000." -ForegroundColor Green
     Write-Host "Backend process already existed before this run, so no new stdout/stderr log files were created by this script." -ForegroundColor DarkGray
     $latestBackendOut = Get-LatestLogPath -Pattern "backend-api-*.out.log"
     $latestBackendErr = Get-LatestLogPath -Pattern "backend-api-*.err.log"
     if ($latestBackendOut) { Write-Host "Latest backend stdout log: $latestBackendOut" -ForegroundColor DarkGray }
     if ($latestBackendErr) { Write-Host "Latest backend stderr log: $latestBackendErr" -ForegroundColor DarkGray }
     return
+  }
+
+  $listening = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+  if ($listening) {
+    Write-Host "Port 8000 is listening, but /health is not responding. Restarting backend API..." -ForegroundColor Yellow
+    Stop-BackendOnPort8000
   }
 
   $venvPython = "C:\code_projects\SHuBERT_transferLearning\.venv310\Scripts\python.exe"
@@ -172,7 +187,7 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
 
   Write-Host ("Using backend Python: " + $python + " " + ($pythonPrefixArgs -join " ")) -ForegroundColor DarkGray
   Write-Host "Starting backend API on http://localhost:8000 ..." -ForegroundColor Cyan
-  $argList = @($pythonPrefixArgs + @("`"$apiPath`""))
+  $argList = @($pythonPrefixArgs + @("-u", "`"$apiPath`""))
   $outLog = $null
   $errLog = $null
   if ($InlineLogs) {
@@ -182,14 +197,20 @@ function Start-BackendIfNeeded([switch]$ForceRestart, [bool]$InlineLogs = $true)
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $outLog = Join-Path $logsDir ("backend-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
     $errLog = Join-Path $logsDir ("backend-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
-    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $backendDir -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
     Write-Host "Backend stdout log: $outLog" -ForegroundColor DarkGray
     Write-Host "Backend stderr log: $errLog" -ForegroundColor DarkGray
   }
-  Start-Sleep -Seconds 2
 
-  $listeningAfter = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
-  if (-not $listeningAfter) {
+  for ($i = 0; $i -lt 60; $i++) {
+    Start-Sleep -Seconds 1
+    if (Test-BackendHealthy) {
+      Write-Host "Backend API is healthy on http://localhost:8000." -ForegroundColor Green
+      return
+    }
+  }
+
+  if (-not (Test-BackendHealthy)) {
     $stdoutTail = ""
     $stderrTail = ""
     if ($outLog -and (Test-Path $outLog)) {
@@ -356,7 +377,7 @@ function Start-LearningApiIfNeeded([switch]$ForceRestart, [switch]$Skip, [bool]$
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $outLog = Join-Path $logsDir ("learning-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".out.log")
     $errLog = Join-Path $logsDir ("learning-api-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
-    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -WindowStyle Normal -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+    $proc = Start-Process -FilePath $python -ArgumentList $argList -WorkingDirectory $mlRootDir -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
     Write-Host "Learning API stdout log: $outLog" -ForegroundColor DarkGray
     Write-Host "Learning API stderr log: $errLog" -ForegroundColor DarkGray
   }
