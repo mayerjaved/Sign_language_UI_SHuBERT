@@ -296,49 +296,57 @@ function asConfusionWords(value: unknown): LearningConfusionWord[] {
     if (!Array.isArray(value)) {
         return [];
     }
-    return value
-        .map((entry) => {
-            if (!entry || typeof entry !== "object") {
-                return null;
-            }
-            const record = entry as Record<string, unknown>;
-            const word = asString(record.word).trim();
-            if (!word) {
-                return null;
-            }
-            const similarity = asNumber(record.similarity, NaN);
-            const distance = asNumber(record.distance, NaN);
-            return {
-                word,
-                similarity: Number.isFinite(similarity) ? similarity : undefined,
-                distance: Number.isFinite(distance) ? distance : undefined,
-            };
-        })
-        .filter((entry): entry is LearningConfusionWord => Boolean(entry));
+    const words: LearningConfusionWord[] = [];
+    for (const entry of value) {
+        if (!entry || typeof entry !== "object") {
+            continue;
+        }
+
+        const record = entry as Record<string, unknown>;
+        const word = asString(record.word).trim();
+        if (!word) {
+            continue;
+        }
+
+        const parsed: LearningConfusionWord = { word };
+        const similarity = asNumber(record.similarity, NaN);
+        const distance = asNumber(record.distance, NaN);
+        if (Number.isFinite(similarity)) {
+            parsed.similarity = similarity;
+        }
+        if (Number.isFinite(distance)) {
+            parsed.distance = distance;
+        }
+        words.push(parsed);
+    }
+    return words;
 }
 
 function asNearestWords(value: unknown): LearningNearestWord[] {
     if (!Array.isArray(value)) {
         return [];
     }
-    return value
-        .map((entry) => {
-            if (!entry || typeof entry !== "object") {
-                return null;
-            }
-            const record = entry as Record<string, unknown>;
-            const word = asString(record.word).trim();
-            const distance = asNumber(record.distance, NaN);
-            if (!word || !Number.isFinite(distance)) {
-                return null;
-            }
-            return {
-                word,
-                distance,
-                role: asString(record.role) || undefined,
-            };
-        })
-        .filter((entry): entry is LearningNearestWord => Boolean(entry));
+    const words: LearningNearestWord[] = [];
+    for (const entry of value) {
+        if (!entry || typeof entry !== "object") {
+            continue;
+        }
+
+        const record = entry as Record<string, unknown>;
+        const word = asString(record.word).trim();
+        const distance = asNumber(record.distance, NaN);
+        if (!word || !Number.isFinite(distance)) {
+            continue;
+        }
+
+        const parsed: LearningNearestWord = { word, distance };
+        const role = asString(record.role).trim();
+        if (role) {
+            parsed.role = role;
+        }
+        words.push(parsed);
+    }
+    return words;
 }
 
 function asStringList(value: unknown): string[] {
