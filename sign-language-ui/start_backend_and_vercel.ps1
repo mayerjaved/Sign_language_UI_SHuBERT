@@ -6,7 +6,8 @@ param(
   [switch]$RestartBackend,
   [switch]$SkipTrslDocker,
   [switch]$SkipLearningApi,
-  [bool]$InlineBackendLogs = $false
+  [bool]$InlineBackendLogs = $false,
+  [switch]$DebugTunnelLogs
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,14 @@ function Get-LatestLogPath([string]$Pattern) {
     Select-Object -First 1
   if ($latest) { return $latest.FullName }
   return $null
+}
+
+function Get-LogTailText([string]$Path, [int]$Lines = 40) {
+  if (-not $Path -or -not (Test-Path $Path)) {
+    return ""
+  }
+
+  return (Get-Content -LiteralPath $Path -Tail $Lines -ErrorAction SilentlyContinue) -join "`n"
 }
 
 function Show-DeploySourceNotice([string]$repoPath) {
@@ -242,18 +251,43 @@ function Get-CloudflaredPath {
   throw "cloudflared not found. Install it with: winget install --id Cloudflare.cloudflared"
 }
 
+function Get-CloudflaredVersionText([string]$cloudflaredPath) {
+  try {
+    return ((& $cloudflaredPath --version 2>&1) | Out-String).Trim()
+  } catch {
+    return "unknown"
+  }
+}
+
 function Start-QuickTunnelAndGetUrl {
   $cloudflared = Get-CloudflaredPath
+  $cloudflaredVersion = Get-CloudflaredVersionText -cloudflaredPath $cloudflared
   # Use unique log files so parallel/previous runs don't collide.
   $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
   $log = Join-Path $logsDir ("cloudflared-quick-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".log")
+  $traceLog = Join-Path $logsDir ("cloudflared-trace-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".log")
 
   Write-Host "Starting Cloudflare Quick Tunnel for http://localhost:8000 ..." -ForegroundColor Cyan
   # PowerShell requires different files for stdout/stderr redirection.
   $errLog = Join-Path $logsDir ("cloudflared-quick-" + $stamp + "-" + ([Guid]::NewGuid().ToString("N")) + ".err.log")
-  Start-Process -FilePath $cloudflared -ArgumentList "tunnel --url http://localhost:8000" -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru | Out-Null
+  $argList = @(
+    "tunnel",
+    "--url", "http://localhost:8000",
+    "--metrics", "localhost:0",
+    "--no-autoupdate",
+    "--trace-output", $traceLog
+  )
+  if ($DebugTunnelLogs) {
+    $argList += @("--loglevel", "debug", "--transport-loglevel", "debug")
+  }
+
+  $proc = Start-Process -FilePath $cloudflared -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errLog -PassThru
   Write-Host "Cloudflared stdout log: $log" -ForegroundColor DarkGray
   Write-Host "Cloudflared stderr log: $errLog" -ForegroundColor DarkGray
+  Write-Host "Cloudflared trace log: $traceLog" -ForegroundColor DarkGray
+  Write-Host "Cloudflared executable: $cloudflared" -ForegroundColor DarkGray
+  Write-Host "Cloudflared version: $cloudflaredVersion" -ForegroundColor DarkGray
+  Write-Host "Cloudflared PID: $($proc.Id)" -ForegroundColor DarkGray
 
   $tunnelUrl = $null
   for ($i = 0; $i -lt 90; $i++) {
@@ -272,10 +306,53 @@ function Start-QuickTunnelAndGetUrl {
         break
       }
     }
+
+    if ($proc.HasExited) {
+      $stdoutTail = Get-LogTailText -Path $log
+      $stderrTail = Get-LogTailText -Path $errLog
+      $traceTail = Get-LogTailText -Path $traceLog
+
+      if ($stdoutTail) {
+        Write-Host "Cloudflared stdout tail:" -ForegroundColor Yellow
+        Write-Host $stdoutTail -ForegroundColor DarkYellow
+      }
+      if ($stderrTail) {
+        Write-Host "Cloudflared stderr tail:" -ForegroundColor Yellow
+        Write-Host $stderrTail -ForegroundColor DarkYellow
+      }
+      if ($traceTail) {
+        Write-Host "Cloudflared trace tail:" -ForegroundColor Yellow
+        Write-Host $traceTail -ForegroundColor DarkYellow
+      }
+
+      throw "cloudflared exited before yielding a tunnel URL. Exit code: $($proc.ExitCode). Logs: $log ; $errLog ; $traceLog"
+    }
   }
 
   if (-not $tunnelUrl) {
-    throw "Could not detect tunnel URL. Check $log and $errLog for details."
+    $stdoutTail = Get-LogTailText -Path $log
+    $stderrTail = Get-LogTailText -Path $errLog
+    $traceTail = Get-LogTailText -Path $traceLog
+    $processState = "running"
+
+    if ($proc.HasExited) {
+      $processState = "exited with code $($proc.ExitCode)"
+    }
+
+    if ($stdoutTail) {
+      Write-Host "Cloudflared stdout tail:" -ForegroundColor Yellow
+      Write-Host $stdoutTail -ForegroundColor DarkYellow
+    }
+    if ($stderrTail) {
+      Write-Host "Cloudflared stderr tail:" -ForegroundColor Yellow
+      Write-Host $stderrTail -ForegroundColor DarkYellow
+    }
+    if ($traceTail) {
+      Write-Host "Cloudflared trace tail:" -ForegroundColor Yellow
+      Write-Host $traceTail -ForegroundColor DarkYellow
+    }
+
+    throw "Could not detect tunnel URL within 90 seconds. cloudflared PID $($proc.Id) is $processState. Logs: $log ; $errLog ; $traceLog"
   }
   return $tunnelUrl
 }
