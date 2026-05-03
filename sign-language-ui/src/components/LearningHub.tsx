@@ -2,7 +2,9 @@
 
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import {
+    AlertTriangle,
     ArrowRight,
+    Bug,
     Camera,
     CheckCircle2,
     Flame,
@@ -103,6 +105,28 @@ function toPrettyWord(word: string): string {
         .filter(Boolean)
         .map((chunk) => chunk[0].toUpperCase() + chunk.slice(1))
         .join(" ");
+}
+
+function formatDebugNumber(value: number | undefined | null, digits = 3): string {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+    return value.toFixed(digits);
+}
+
+function formatDebugShape(shape: number[] | undefined): string {
+    if (!shape || shape.length === 0) return "n/a";
+    return shape.join(" x ");
+}
+
+function uniqueMessages(messages: Array<string | undefined>): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const message of messages) {
+        const cleaned = (message || "").trim();
+        if (!cleaned || seen.has(cleaned)) continue;
+        seen.add(cleaned);
+        result.push(cleaned);
+    }
+    return result;
 }
 
 function getMediaErrorLabel(code: number | undefined): string {
@@ -214,10 +238,17 @@ export default function LearningHub() {
             if (!isMounted) return;
             if (health.status === "ok") {
                 setLearningBackendState("online");
-                setLearningBackendDetail(
+                const wordLabel =
                     typeof health.words_available === "number"
-                        ? `${health.words_available} words indexed`
-                        : null,
+                        ? `${health.words_available} scoreable / ${health.indexed_words ?? "?"} indexed`
+                        : null;
+                const manifoldLabel =
+                    typeof health.manifold_words === "number"
+                        ? `${health.manifold_words} in manifold`
+                        : null;
+                const warningLabel = health.warnings?.[0];
+                setLearningBackendDetail(
+                    [wordLabel, manifoldLabel, warningLabel].filter(Boolean).join(" / ") || null,
                 );
             } else {
                 setLearningBackendState("offline");
@@ -518,6 +549,31 @@ export default function LearningHub() {
               : currentScore >= 55
                 ? "from-amber-300 via-yellow-300 to-orange-300"
                 : "from-rose-300 via-red-300 to-orange-300";
+    const debugWarnings = result
+        ? uniqueMessages([
+              ...(result.debug?.warnings ?? []),
+              ...(result.scoring.warnings ?? []),
+              ...(result.feedback.details.warnings ?? []),
+          ])
+        : [];
+    const debugCalibration =
+        result?.debug?.scoring?.calibration ??
+        result?.scoring.calibration ??
+        result?.feedback.details.calibration ??
+        null;
+    const debugNearestWords =
+        result?.debug?.scoring?.nearest_words ??
+        result?.scoring.nearest_words ??
+        result?.feedback.details.nearest_words ??
+        [];
+    const debugFeatureEntries = Object.entries(result?.debug?.features ?? {});
+    const debugManifold = result?.debug?.backend?.manifold;
+    const debugVideo = result?.debug?.video;
+    const debugSequence = result?.debug?.sequence;
+    const debugManifoldWordCount =
+        typeof debugManifold?.word_count === "number" ? debugManifold.word_count : undefined;
+    const debugManifoldTotalClips =
+        typeof debugManifold?.total_clips === "number" ? debugManifold.total_clips : undefined;
 
     return (
         <div className="mx-auto w-full max-w-6xl space-y-5 animate-rise">
@@ -959,6 +1015,125 @@ export default function LearningHub() {
                                     )}
                                 </div>
                             </div>
+
+                            {result.debug && (
+                                <div className="rounded-xl border border-cyan-200 bg-cyan-50/75 p-3 text-sm text-slate-800">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-800">
+                                            <Bug className="h-4 w-4" />
+                                            Backend Debug
+                                        </p>
+                                        <span className="font-mono text-[11px] text-cyan-900">
+                                            {result.debug.request_id ?? result.attempt_id}
+                                        </span>
+                                    </div>
+
+                                    {debugWarnings.length > 0 && (
+                                        <div className="mt-3 space-y-2">
+                                            {debugWarnings.map((warning) => (
+                                                <p
+                                                    key={warning}
+                                                    className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900"
+                                                >
+                                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                                                    <span>{warning}</span>
+                                                </p>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                                        <div className="rounded-lg border border-cyan-100 bg-white/75 p-2">
+                                            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                                Video
+                                            </p>
+                                            <p className="mt-1 font-mono text-xs">
+                                                {debugVideo?.frame_count ?? "n/a"} frames
+                                            </p>
+                                            <p className="font-mono text-[11px] text-slate-500">
+                                                {debugVideo?.width ?? "?"}x{debugVideo?.height ?? "?"}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg border border-cyan-100 bg-white/75 p-2">
+                                            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                                Sequence
+                                            </p>
+                                            <p className="mt-1 font-mono text-xs">
+                                                {formatDebugShape(debugSequence?.shape)}
+                                            </p>
+                                            <p className="font-mono text-[11px] text-slate-500">
+                                                norm {formatDebugNumber(debugSequence?.norm_mean, 1)}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg border border-cyan-100 bg-white/75 p-2">
+                                            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                                Calibration
+                                            </p>
+                                            <p className="mt-1 font-mono text-xs">
+                                                {debugCalibration?.source ?? "n/a"}
+                                            </p>
+                                            <p className="font-mono text-[11px] text-slate-500">
+                                                raw {formatDebugNumber(debugCalibration?.raw_min, 3)}-
+                                                {formatDebugNumber(debugCalibration?.raw_max, 3)}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-lg border border-cyan-100 bg-white/75 p-2">
+                                            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                                Manifold
+                                            </p>
+                                            <p className="mt-1 font-mono text-xs">
+                                                {debugManifoldWordCount ?? "n/a"} words
+                                            </p>
+                                            <p className="font-mono text-[11px] text-slate-500">
+                                                {debugManifoldTotalClips ?? "n/a"} clips
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {debugNearestWords.length > 0 && (
+                                        <div className="mt-3">
+                                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                Nearest Words
+                                            </p>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {debugNearestWords.map((entry) => (
+                                                    <span
+                                                        key={`${entry.word}-${entry.role ?? "word"}`}
+                                                        className="rounded-full border border-cyan-100 bg-white/80 px-2 py-1 font-mono text-xs text-slate-700"
+                                                    >
+                                                        {toPrettyWord(entry.word)}:{" "}
+                                                        {formatDebugNumber(entry.distance, 4)}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {debugFeatureEntries.length > 0 && (
+                                        <details className="mt-3">
+                                            <summary className="cursor-pointer text-xs font-semibold text-cyan-900">
+                                                Feature streams
+                                            </summary>
+                                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                                                {debugFeatureEntries.map(([name, metric]) => (
+                                                    <div
+                                                        key={name}
+                                                        className="rounded-lg border border-cyan-100 bg-white/75 p-2"
+                                                    >
+                                                        <p className="font-mono text-xs text-slate-800">
+                                                            {name}
+                                                        </p>
+                                                        <p className="font-mono text-[11px] text-slate-500">
+                                                            {formatDebugShape(metric.shape)} / finite{" "}
+                                                            {formatDebugNumber(metric.finite_ratio, 3)}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </details>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="grid gap-3 md:grid-cols-2">
                                 {referenceVideoSrc && (

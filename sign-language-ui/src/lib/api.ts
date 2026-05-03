@@ -16,11 +16,13 @@ export interface LearningReferenceClip {
     is_medoid?: boolean;
     feature_path?: string;
     similarity?: number;
+    distance?: number;
 }
 
 export interface LearningConfusionWord {
     word: string;
-    similarity: number;
+    similarity?: number;
+    distance?: number;
 }
 
 export interface LearningWordInfo {
@@ -46,8 +48,13 @@ export interface LearningFeedbackGrade {
 export interface LearningFeedbackDetails {
     target_similarity: number;
     target_percentile: number;
+    target_distance?: number;
+    wrong_word_distance?: number;
     margin: number;
     raw_score: number;
+    calibration?: LearningScoreCalibration | null;
+    nearest_words?: LearningNearestWord[];
+    warnings?: string[];
 }
 
 export interface LearningFeedback {
@@ -56,7 +63,8 @@ export interface LearningFeedback {
     hints: string[];
     confusion: {
         word: string;
-        similarity: number;
+        similarity?: number;
+        distance?: number;
         warning: string;
     } | null;
     nearest_match: LearningReferenceClip | null;
@@ -64,22 +72,52 @@ export interface LearningFeedback {
     details: LearningFeedbackDetails;
 }
 
+export interface LearningScoreCalibration {
+    available?: boolean;
+    score?: number;
+    percentile_score?: number;
+    fallback_distance_score?: number;
+    source?: string;
+    is_distance_metric?: boolean;
+    percentile?: number;
+    raw_min?: number;
+    raw_max?: number;
+    clamped_low?: boolean;
+    clamped_high?: boolean;
+    tail_floor_score?: number | null;
+    [key: string]: unknown;
+}
+
+export interface LearningNearestWord {
+    word: string;
+    distance: number;
+    role?: string;
+}
+
 export interface LearningScoring {
     target_word: string;
+    predicted_word?: string;
     target_similarity: number;
     target_percentile: number;
+    target_distance?: number;
     nearest_wrong_word: string;
     wrong_word_similarity: number;
+    wrong_word_distance?: number;
     margin: number;
     nearest_clips: LearningReferenceClip[];
     raw_score: number;
     calibrated_score: number;
+    calibration?: LearningScoreCalibration | null;
+    nearest_words?: LearningNearestWord[];
+    manifold_word_count?: number;
+    warnings?: string[];
 }
 
 export interface LearningScoreResponse {
     attempt_id: string;
     feedback: LearningFeedback;
     scoring: LearningScoring;
+    debug?: LearningScoreDebug | null;
 }
 
 export interface LearningStats {
@@ -93,7 +131,64 @@ export interface LearningStats {
 export interface LearningHealth {
     status: "ok" | "error";
     words_available?: number;
+    indexed_words?: number;
+    manifold_words?: number;
+    warnings?: string[];
     detail?: string;
+}
+
+export interface LearningDebugMetric {
+    shape?: number[];
+    dtype?: string;
+    frame_count?: number;
+    finite_ratio?: number;
+    zero_row_count?: number;
+    norm_min?: number;
+    norm_mean?: number;
+    norm_max?: number;
+    norm?: number;
+    [key: string]: unknown;
+}
+
+export interface LearningScoreDebug {
+    request_id?: string;
+    attempt_id?: string;
+    target_word?: string;
+    user_id?: string;
+    request?: Record<string, unknown>;
+    video?: LearningDebugMetric & {
+        height?: number;
+        width?: number;
+        channels?: number;
+        decoder_repaired?: boolean;
+        retained?: boolean;
+    };
+    models?: Record<string, unknown>;
+    features?: Record<string, LearningDebugMetric>;
+    sequence?: LearningDebugMetric;
+    backend?: {
+        indexed_word_count?: number;
+        available_word_count?: number;
+        available_word_sample?: string[];
+        manifold?: Record<string, unknown>;
+        calibration?: Record<string, unknown>;
+        warnings?: string[];
+    };
+    scoring?: {
+        target_word?: string;
+        predicted_word?: string;
+        target_distance?: number;
+        wrong_word_distance?: number;
+        margin?: number;
+        raw_score?: number;
+        calibrated_score?: number;
+        calibration?: LearningScoreCalibration | null;
+        nearest_words?: LearningNearestWord[];
+    };
+    timings_ms?: Record<string, number>;
+    warnings?: string[];
+    error?: string;
+    [key: string]: unknown;
 }
 
 const FALLBACK_LEARNING_WORDS = [
@@ -162,6 +257,11 @@ function asNumber(value: unknown, fallback = 0): number {
     return fallback;
 }
 
+function asOptionalNumber(value: unknown): number | undefined {
+    const parsed = asNumber(value, NaN);
+    return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function asReferenceClips(value: unknown): LearningReferenceClip[] {
     if (!Array.isArray(value)) {
         return [];
@@ -179,12 +279,14 @@ function asReferenceClips(value: unknown): LearningReferenceClip[] {
         }
 
         const similarityValue = asNumber(record.similarity, NaN);
+        const distanceValue = asNumber(record.distance, NaN);
         clips.push({
             filename,
             word: asString(record.word) || undefined,
             is_medoid: typeof record.is_medoid === "boolean" ? record.is_medoid : undefined,
             feature_path: asString(record.feature_path) || undefined,
             similarity: Number.isFinite(similarityValue) ? similarityValue : undefined,
+            distance: Number.isFinite(distanceValue) ? distanceValue : undefined,
         });
     }
     return clips;
@@ -204,12 +306,54 @@ function asConfusionWords(value: unknown): LearningConfusionWord[] {
             if (!word) {
                 return null;
             }
+            const similarity = asNumber(record.similarity, NaN);
+            const distance = asNumber(record.distance, NaN);
             return {
                 word,
-                similarity: asNumber(record.similarity, 0),
+                similarity: Number.isFinite(similarity) ? similarity : undefined,
+                distance: Number.isFinite(distance) ? distance : undefined,
             };
         })
         .filter((entry): entry is LearningConfusionWord => Boolean(entry));
+}
+
+function asNearestWords(value: unknown): LearningNearestWord[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value
+        .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+                return null;
+            }
+            const record = entry as Record<string, unknown>;
+            const word = asString(record.word).trim();
+            const distance = asNumber(record.distance, NaN);
+            if (!word || !Number.isFinite(distance)) {
+                return null;
+            }
+            return {
+                word,
+                distance,
+                role: asString(record.role) || undefined,
+            };
+        })
+        .filter((entry): entry is LearningNearestWord => Boolean(entry));
+}
+
+function asStringList(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.map((entry) => asString(entry).trim()).filter((entry) => Boolean(entry));
+}
+
+function asCalibration(value: unknown): LearningScoreCalibration | null {
+    return value && typeof value === "object" ? (value as LearningScoreCalibration) : null;
+}
+
+function asScoreDebug(value: unknown): LearningScoreDebug | null {
+    return value && typeof value === "object" ? (value as LearningScoreDebug) : null;
 }
 
 function normalizeReferenceVideoUrl(pathOrUrl: unknown): string | null {
@@ -273,21 +417,34 @@ function defaultLearningScoreResponse(word: string): LearningScoreResponse {
             details: {
                 target_similarity: 0,
                 target_percentile: 0,
+                target_distance: undefined,
+                wrong_word_distance: undefined,
                 margin: 0,
                 raw_score: 0,
+                calibration: null,
+                nearest_words: [],
+                warnings: [],
             },
         },
         scoring: {
             target_word: normalizedWord,
+            predicted_word: normalizedWord,
             target_similarity: 0,
             target_percentile: 0,
+            target_distance: undefined,
             nearest_wrong_word: "",
             wrong_word_similarity: 0,
+            wrong_word_distance: undefined,
             margin: 0,
             nearest_clips: [],
             raw_score: 0,
             calibrated_score: 0,
+            calibration: null,
+            nearest_words: [],
+            manifold_word_count: 0,
+            warnings: [],
         },
+        debug: null,
     };
 }
 
@@ -424,9 +581,14 @@ export async function getLearningHealth(): Promise<LearningHealth> {
         const payload = (await res.json()) as Record<string, unknown>;
         const status = asString(payload.status, "ok").toLowerCase() === "ok" ? "ok" : "error";
         const wordsAvailable = asNumber(payload.words_available, NaN);
+        const indexedWords = asNumber(payload.indexed_words, NaN);
+        const manifoldWords = asNumber(payload.manifold_words, NaN);
         return {
             status,
             words_available: Number.isFinite(wordsAvailable) ? wordsAvailable : undefined,
+            indexed_words: Number.isFinite(indexedWords) ? indexedWords : undefined,
+            manifold_words: Number.isFinite(manifoldWords) ? manifoldWords : undefined,
+            warnings: asStringList(payload.warnings),
             detail: status === "error" ? asString(payload.detail) || undefined : undefined,
         };
     } catch (error) {
@@ -486,6 +648,7 @@ export async function scoreLearningAttempt(
     formData.append("video", videoBlob, "attempt.webm");
     formData.append("word", normalizedWord);
     formData.append("user_id", userId);
+    formData.append("debug", "true");
 
     const res = await fetch(`${LEARNING_API_BASE}/api/learning/score`, {
         method: "POST",
@@ -529,14 +692,21 @@ export async function scoreLearningAttempt(
         attempt_id: asString(payload.attempt_id),
         scoring: {
             target_word: asString(scoringRecord.target_word, normalizedWord),
+            predicted_word: asString(scoringRecord.predicted_word) || undefined,
             target_similarity: asNumber(scoringRecord.target_similarity, 0),
             target_percentile: asNumber(scoringRecord.target_percentile, 0),
+            target_distance: asOptionalNumber(scoringRecord.target_distance),
             nearest_wrong_word: asString(scoringRecord.nearest_wrong_word),
             wrong_word_similarity: asNumber(scoringRecord.wrong_word_similarity, 0),
+            wrong_word_distance: asOptionalNumber(scoringRecord.wrong_word_distance),
             margin: asNumber(scoringRecord.margin, 0),
             nearest_clips: asReferenceClips(scoringRecord.nearest_clips),
             raw_score: asNumber(scoringRecord.raw_score, 0),
             calibrated_score: asNumber(scoringRecord.calibrated_score, 0),
+            calibration: asCalibration(scoringRecord.calibration),
+            nearest_words: asNearestWords(scoringRecord.nearest_words),
+            manifold_word_count: asNumber(scoringRecord.manifold_word_count, 0),
+            warnings: asStringList(scoringRecord.warnings),
         },
         feedback: {
             score: asNumber(feedbackRecord.score, fallback.feedback.score),
@@ -554,24 +724,32 @@ export async function scoreLearningAttempt(
             confusion: confusionRecord
                 ? {
                       word: asString(confusionRecord.word),
-                      similarity: asNumber(confusionRecord.similarity, 0),
+                      similarity: asOptionalNumber(confusionRecord.similarity),
+                      distance: asOptionalNumber(confusionRecord.distance),
                       warning: asString(confusionRecord.warning),
                   }
                 : null,
             nearest_match: nearestMatchRecord
                 ? {
                       filename: asString(nearestMatchRecord.filename),
-                      similarity: asNumber(nearestMatchRecord.similarity, NaN),
+                      similarity: asOptionalNumber(nearestMatchRecord.similarity),
+                      distance: asOptionalNumber(nearestMatchRecord.distance),
                   }
                 : null,
             target_word: asString(feedbackRecord.target_word, normalizedWord),
             details: {
                 target_similarity: asNumber(detailsRecord.target_similarity, 0),
                 target_percentile: asNumber(detailsRecord.target_percentile, 0),
+                target_distance: asOptionalNumber(detailsRecord.target_distance),
+                wrong_word_distance: asOptionalNumber(detailsRecord.wrong_word_distance),
                 margin: asNumber(detailsRecord.margin, 0),
                 raw_score: asNumber(detailsRecord.raw_score, 0),
+                calibration: asCalibration(detailsRecord.calibration),
+                nearest_words: asNearestWords(detailsRecord.nearest_words),
+                warnings: asStringList(detailsRecord.warnings),
             },
         },
+        debug: asScoreDebug(payload.debug),
     };
 }
 
