@@ -54,6 +54,8 @@ export interface LearningFeedbackDetails {
     raw_score: number;
     calibration?: LearningScoreCalibration | null;
     nearest_words?: LearningNearestWord[];
+    scoring_streams?: string[];
+    ignored_streams?: string[];
     warnings?: string[];
 }
 
@@ -110,6 +112,8 @@ export interface LearningScoring {
     calibration?: LearningScoreCalibration | null;
     nearest_words?: LearningNearestWord[];
     manifold_word_count?: number;
+    scoring_streams?: string[];
+    ignored_streams?: string[];
     warnings?: string[];
 }
 
@@ -184,6 +188,8 @@ export interface LearningScoreDebug {
         calibrated_score?: number;
         calibration?: LearningScoreCalibration | null;
         nearest_words?: LearningNearestWord[];
+        scoring_streams?: string[];
+        ignored_streams?: string[];
     };
     timings_ms?: Record<string, number>;
     warnings?: string[];
@@ -431,6 +437,8 @@ function defaultLearningScoreResponse(word: string): LearningScoreResponse {
                 raw_score: 0,
                 calibration: null,
                 nearest_words: [],
+                scoring_streams: [],
+                ignored_streams: [],
                 warnings: [],
             },
         },
@@ -450,6 +458,8 @@ function defaultLearningScoreResponse(word: string): LearningScoreResponse {
             calibration: null,
             nearest_words: [],
             manifold_word_count: 0,
+            scoring_streams: [],
+            ignored_streams: [],
             warnings: [],
         },
         debug: null,
@@ -714,6 +724,8 @@ export async function scoreLearningAttempt(
             calibration: asCalibration(scoringRecord.calibration),
             nearest_words: asNearestWords(scoringRecord.nearest_words),
             manifold_word_count: asNumber(scoringRecord.manifold_word_count, 0),
+            scoring_streams: asStringList(scoringRecord.scoring_streams),
+            ignored_streams: asStringList(scoringRecord.ignored_streams),
             warnings: asStringList(scoringRecord.warnings),
         },
         feedback: {
@@ -754,6 +766,8 @@ export async function scoreLearningAttempt(
                 raw_score: asNumber(detailsRecord.raw_score, 0),
                 calibration: asCalibration(detailsRecord.calibration),
                 nearest_words: asNearestWords(detailsRecord.nearest_words),
+                scoring_streams: asStringList(detailsRecord.scoring_streams),
+                ignored_streams: asStringList(detailsRecord.ignored_streams),
                 warnings: asStringList(detailsRecord.warnings),
             },
         },

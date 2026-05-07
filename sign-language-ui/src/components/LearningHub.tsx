@@ -117,6 +117,10 @@ function formatDebugShape(shape: number[] | undefined): string {
     return shape.join(" x ");
 }
 
+function formatStreamLabel(stream: string): string {
+    return stream.replace(/_features$/i, "").replace(/_/g, " ");
+}
+
 function uniqueMessages(messages: Array<string | undefined>): string[] {
     const seen = new Set<string>();
     const result: string[] = [];
@@ -565,6 +569,16 @@ export default function LearningHub() {
         result?.debug?.scoring?.nearest_words ??
         result?.scoring.nearest_words ??
         result?.feedback.details.nearest_words ??
+        [];
+    const debugScoringStreams =
+        result?.debug?.scoring?.scoring_streams ??
+        result?.scoring.scoring_streams ??
+        result?.feedback.details.scoring_streams ??
+        [];
+    const debugIgnoredStreams =
+        result?.debug?.scoring?.ignored_streams ??
+        result?.scoring.ignored_streams ??
+        result?.feedback.details.ignored_streams ??
         [];
     const debugFeatureEntries = Object.entries(result?.debug?.features ?? {});
     const debugManifold = result?.debug?.backend?.manifold;
@@ -1089,6 +1103,15 @@ export default function LearningHub() {
                                             </p>
                                         </div>
                                     </div>
+
+                                    {debugScoringStreams.length > 0 && (
+                                        <p className="mt-3 font-mono text-[11px] text-cyan-900">
+                                            Scoring: {debugScoringStreams.map(formatStreamLabel).join(", ")}
+                                            {debugIgnoredStreams.length > 0
+                                                ? ` / Ignored: ${debugIgnoredStreams.map(formatStreamLabel).join(", ")}`
+                                                : ""}
+                                        </p>
+                                    )}
 
                                     {debugNearestWords.length > 0 && (
                                         <div className="mt-3">
