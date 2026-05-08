@@ -26,7 +26,6 @@ import {
   Medal,
   Play,
   Search,
-  ShieldCheck,
   Sparkles,
   Star,
   Target,
@@ -315,98 +314,31 @@ export function LoginPage() {
   const isSignup = authMode === "signup";
 
   return (
-    <main className="grid min-h-screen bg-[#f4f7fb] text-[#102033] lg:grid-cols-[minmax(0,1.04fr)_minmax(420px,0.96fr)]">
-      <section className="relative hidden overflow-hidden bg-[#132238] text-white lg:block">
-        <DemoVideo
-          src="/demo/asl-message.mp4"
-          className="absolute inset-0 h-full w-full object-cover opacity-30"
-        />
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(19,34,56,0.96),rgba(15,118,110,0.72),rgba(232,93,93,0.5))]" />
-        <div className="relative flex min-h-screen flex-col justify-between p-10 xl:p-14">
-          <Link href="/" className="flex items-center gap-3 text-white" aria-label="GestureBridge">
-            <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white shadow-lg">
-              <Image src="/logo-bridge.png" alt="" width={34} height={34} priority />
+    <main className="min-h-screen bg-[#f6f8fb] px-4 py-8 text-[#102033] sm:px-6">
+      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-md flex-col justify-center">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Link href="/" className="flex items-center gap-3" aria-label="GestureBridge">
+            <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-[#d9e2ec] bg-white shadow-sm">
+              <Image src="/logo-bridge.png" alt="" width={32} height={32} priority />
             </span>
-            <span className="text-2xl font-bold">GestureBridge</span>
+            <span className="text-2xl font-bold text-[#102033]">GestureBridge</span>
           </Link>
-
-          <div className="max-w-xl">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/14 px-4 py-2 text-sm font-semibold text-white backdrop-blur">
-              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-              Practice portal
-            </div>
-            <h1 className="text-5xl font-bold leading-[1.05]">Build fluency with every signed word.</h1>
-            <p className="mt-5 max-w-lg text-lg leading-8 text-[#edf7ff]">
-              Personalized lessons, searchable vocabulary, and progress tracking now live beside the translation demo.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/TranslationDemo"
-                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-bold text-[#132238] transition hover:bg-[#edf3f8]"
-              >
-                Open Translation Demo
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link
-                href="/library"
-                className="inline-flex items-center gap-2 rounded-lg border border-white/40 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/12"
-              >
-                Browse Library
-                <BookOpen className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </div>
-          </div>
-
-          <div className="grid max-w-xl grid-cols-3 gap-3">
-            {[
-              { label: "Streak", value: "14d", icon: Flame },
-              { label: "Words", value: "128", icon: BookOpen },
-              { label: "Accuracy", value: "92%", icon: Target },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.label} className="rounded-lg border border-white/20 bg-white/12 p-4 backdrop-blur">
-                  <Icon className="h-5 w-5 text-[#96f2df]" aria-hidden="true" />
-                  <p className="mt-4 text-2xl font-bold">{item.value}</p>
-                  <p className="mt-1 text-sm text-[#d9eaff]">{item.label}</p>
-                </div>
-              );
-            })}
-          </div>
+          <p className="mt-3 text-sm text-[#5d6b7c]">
+            {isSignup ? "Create your learning account." : "Sign in to your learning account."}
+          </p>
         </div>
-      </section>
 
-      <section className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
-        <div className="w-full max-w-md">
-          <div className="mb-8 flex items-center justify-between lg:hidden">
-            <Link href="/" className="flex items-center gap-3" aria-label="GestureBridge">
-              <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white shadow-sm">
-                <Image src="/logo-bridge.png" alt="" width={30} height={30} priority />
-              </span>
-              <span className="text-xl font-bold">GestureBridge</span>
-            </Link>
-            <Link
-              href="/TranslationDemo"
-              className="rounded-lg border border-[#c9d6e2] px-3 py-2 text-sm font-semibold text-[#29425f]"
-            >
-              Demo
-            </Link>
+        <div className="rounded-lg border border-[#d9e2ec] bg-white p-6 shadow-[0_18px_55px_rgba(16,32,51,0.08)] sm:p-8">
+          <div>
+            <h1 className="text-2xl font-bold text-[#102033]">
+              {isSignup ? "Create account" : "Log in"}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-[#5d6b7c]">
+              {isSignup
+                ? "Set up a profile for lessons, library, and progress."
+                : "Enter your email and password to continue."}
+            </p>
           </div>
-
-          <div className="rounded-lg border border-[#d9e2ec] bg-white p-6 shadow-[0_24px_80px_rgba(16,32,51,0.11)] sm:p-8">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#0f766e]">
-                {isSignup ? "Create account" : "Welcome back"}
-              </p>
-              <h2 className="mt-2 text-3xl font-bold text-[#102033]">
-                {isSignup ? "Start learning today" : "Sign in to continue"}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-[#5d6b7c]">
-                {isSignup
-                  ? "Create a learner profile for practice, library, and progress."
-                  : "Access your lessons, saved signs, and weekly progress."}
-              </p>
-            </div>
 
             <div className="mt-6 grid grid-cols-2 rounded-lg bg-[#edf3f8] p-1">
               {(["login", "signup"] as AuthMode[]).map((mode) => (
@@ -503,9 +435,8 @@ export function LoginPage() {
                 TranslationDemo
               </Link>
             </div>
-          </div>
         </div>
-      </section>
+      </div>
     </main>
   );
 }
