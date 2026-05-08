@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
@@ -34,6 +34,11 @@ import {
   Video,
   Volume2,
 } from "lucide-react";
+import {
+  getSignLibrary,
+  type LibraryLanguage,
+  type SignLibraryEntry,
+} from "@/lib/api";
 
 type AuthMode = "login" | "signup";
 type PortalSection = "learn" | "library" | "progress";
@@ -575,93 +580,229 @@ export function LearnPage() {
 }
 
 export function LibraryPage() {
+  const [selectedLanguage, setSelectedLanguage] = useState<LibraryLanguage>("TRSL");
   const [query, setQuery] = useState("");
-  const filteredCards = useMemo(() => {
+  const [entries, setEntries] = useState<SignLibraryEntry[]>([]);
+  const [counts, setCounts] = useState<Record<LibraryLanguage, number>>({ ASL: 0, TRSL: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(48);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLibrary = async () => {
+      setIsLoading(true);
+      setErrorMessage(null);
+      try {
+        const response = await getSignLibrary(selectedLanguage);
+        if (!isMounted) return;
+        setEntries(response.entries);
+        setCounts(response.language_counts);
+      } catch (error) {
+        if (!isMounted) return;
+        setEntries([]);
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load the sign library from the API.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadLibrary();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedLanguage]);
+
+  useEffect(() => {
+    setVisibleCount(48);
+  }, [query, selectedLanguage]);
+
+  const filteredEntries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return signCards;
-    return signCards.filter((card) =>
-      [card.word, card.topic, card.language, card.level].some((value) =>
-        value.toLowerCase().includes(normalized),
-      ),
+    if (!normalized) return entries;
+    return entries.filter((entry) =>
+      [
+        entry.word,
+        entry.display_word,
+        entry.translation,
+        entry.language,
+        entry.dataset,
+        entry.source,
+      ].some((value) => value.toLowerCase().includes(normalized)),
     );
-  }, [query]);
+  }, [entries, query]);
+
+  const visibleEntries = filteredEntries.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredEntries.length;
 
   return (
     <PortalShell
       activeSection="library"
       eyebrow="Library"
-      title="Browse vocabulary and lesson clips"
-      subtitle="Search signs by word, topic, language, or difficulty before adding them to a practice deck."
+      title="Browse real dataset clips"
+      subtitle="TRSL and ASL words now come from the local datasets, with one representative clip selected for each word."
     >
-      <section className="mb-6 flex flex-col gap-3 rounded-lg border border-[#d9e2ec] bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-        <label className="relative w-full lg:max-w-md">
-          <span className="sr-only">Search library</span>
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#6b7c90]" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="w-full rounded-lg border border-[#c9d6e2] bg-white py-3 pl-12 pr-4 text-sm outline-none transition placeholder:text-[#8493a5] focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/12"
-            placeholder="Search signs, topics, languages"
-          />
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {["All", "ASL", "TRSL", "Greetings", "Emergency"].map((filter, index) => (
-            <button
-              key={filter}
-              type="button"
-              className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                index === 0
-                  ? "bg-[#14213d] text-white"
-                  : "border border-[#c9d6e2] bg-white text-[#50627a] hover:bg-[#edf3f8]"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
+      <section className="mb-6 rounded-lg border border-[#d9e2ec] bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex rounded-lg bg-[#edf3f8] p-1">
+            {(["TRSL", "ASL"] as LibraryLanguage[]).map((language) => (
+              <button
+                key={language}
+                type="button"
+                onClick={() => setSelectedLanguage(language)}
+                className={`rounded-md px-4 py-2 text-sm font-bold transition ${
+                  selectedLanguage === language
+                    ? "bg-white text-[#102033] shadow-sm"
+                    : "text-[#5d6b7c] hover:text-[#102033]"
+                }`}
+              >
+                {language}
+                <span className="ml-2 text-xs font-semibold text-[#6b7c90]">
+                  {counts[language].toLocaleString()}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <label className="relative w-full lg:max-w-md">
+            <span className="sr-only">Search library</span>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#6b7c90]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="w-full rounded-lg border border-[#c9d6e2] bg-white py-3 pl-12 pr-4 text-sm outline-none transition placeholder:text-[#8493a5] focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/12"
+              placeholder={`Search ${selectedLanguage} words`}
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#5d6b7c]">
+          <span className="font-semibold text-[#102033]">
+            {isLoading
+              ? "Loading library..."
+              : `${filteredEntries.length.toLocaleString()} ${selectedLanguage} words`}
+          </span>
+          <span className="h-1 w-1 rounded-full bg-[#9aabbc]" />
+          <span>Representative clips are selected from available local videos.</span>
         </div>
       </section>
 
-      <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {filteredCards.map((card) => (
-          <article
-            key={card.word}
-            className="overflow-hidden rounded-lg border border-[#d9e2ec] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#b9c8d8] hover:shadow-md"
-          >
-            <div className="relative aspect-video bg-[#132238]">
-              <DemoVideo src={card.videoSrc} className="h-full w-full object-cover opacity-90" />
-              <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-[#132238]/80 px-2 py-1 text-xs font-bold text-white backdrop-blur">
-                <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                {card.duration}
-              </div>
-            </div>
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-bold text-[#102033]">{card.word}</h2>
-                  <p className="mt-1 text-sm text-[#5d6b7c]">
-                    {card.topic} - {card.language}
-                  </p>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${card.accent}`}>
-                  {card.level}
-                </span>
-              </div>
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-[#6b7c90]">
-                  <span>Mastery</span>
-                  <span>{card.progress}%</span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#d9e2ec]">
+      {errorMessage ? (
+        <section className="rounded-lg border border-[#f1b7b7] bg-[#fff7f7] p-5 text-[#8a2525]">
+          <h2 className="text-lg font-bold">Library API unavailable</h2>
+          <p className="mt-2 text-sm leading-6">{errorMessage}</p>
+          <p className="mt-2 text-sm leading-6">
+            Start or redeploy the backend tunnel so `/api/library` can read the local dataset folders.
+          </p>
+        </section>
+      ) : (
+        <>
+          <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {isLoading
+              ? Array.from({ length: 12 }).map((_, index) => (
                   <div
-                    className="h-full rounded-full bg-[#0f766e]"
-                    style={{ width: `${card.progress}%` }}
-                  />
-                </div>
-              </div>
+                    key={index}
+                    className="h-[292px] animate-pulse rounded-lg border border-[#d9e2ec] bg-white"
+                  >
+                    <div className="aspect-video rounded-t-lg bg-[#dbe5ee]" />
+                    <div className="space-y-3 p-4">
+                      <div className="h-5 w-2/3 rounded bg-[#dbe5ee]" />
+                      <div className="h-4 w-1/2 rounded bg-[#e6edf4]" />
+                      <div className="h-4 w-full rounded bg-[#e6edf4]" />
+                    </div>
+                  </div>
+                ))
+              : visibleEntries.map((entry) => (
+                  <article
+                    key={entry.id}
+                    className="overflow-hidden rounded-lg border border-[#d9e2ec] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#b9c8d8] hover:shadow-md"
+                  >
+                    <div className="relative aspect-video bg-[#132238]">
+                      <video
+                        src={entry.video_url}
+                        controls
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="h-full w-full object-contain"
+                      >
+                        <track kind="captions" srcLang="en" label="English captions" />
+                      </video>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-xl font-bold text-[#102033]">
+                            {entry.display_word}
+                          </h2>
+                          <p className="mt-1 text-sm text-[#5d6b7c]">
+                            {entry.language}
+                            {entry.translation ? ` - ${entry.translation}` : ""}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${
+                            entry.language === "TRSL"
+                              ? "bg-[#e8fff7] text-[#047857]"
+                              : "bg-[#e8f3ff] text-[#2563eb]"
+                          }`}
+                        >
+                          {entry.language}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg bg-[#f4f7fb] px-3 py-2">
+                          <p className="font-bold uppercase tracking-[0.12em] text-[#6b7c90]">
+                            Clips
+                          </p>
+                          <p className="mt-1 font-semibold text-[#102033]">
+                            {entry.clip_count.toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-[#f4f7fb] px-3 py-2">
+                          <p className="font-bold uppercase tracking-[0.12em] text-[#6b7c90]">
+                            Source
+                          </p>
+                          <p className="mt-1 truncate font-semibold text-[#102033]">
+                            {entry.source || entry.dataset}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+          </section>
+
+          {!isLoading && filteredEntries.length === 0 && (
+            <section className="rounded-lg border border-[#d9e2ec] bg-white p-8 text-center shadow-sm">
+              <h2 className="text-xl font-bold text-[#102033]">No words found</h2>
+              <p className="mt-2 text-sm text-[#5d6b7c]">
+                Try a different search term or switch language datasets.
+              </p>
+            </section>
+          )}
+
+          {hasMore && (
+            <div className="mt-8 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((current) => current + 48)}
+                className="rounded-lg border border-[#c9d6e2] bg-white px-5 py-3 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
+              >
+                Load More Words
+              </button>
             </div>
-          </article>
-        ))}
-      </section>
+          )}
+        </>
+      )}
     </PortalShell>
   );
 }

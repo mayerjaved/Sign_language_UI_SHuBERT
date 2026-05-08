@@ -197,6 +197,29 @@ export interface LearningScoreDebug {
     [key: string]: unknown;
 }
 
+export type LibraryLanguage = "ASL" | "TRSL";
+
+export interface SignLibraryEntry {
+    id: string;
+    language: LibraryLanguage;
+    word: string;
+    display_word: string;
+    translation: string;
+    class_id?: number;
+    clip_count: number;
+    video_id: string;
+    video_url: string;
+    dataset: string;
+    source: string;
+    split?: string;
+}
+
+export interface SignLibraryResponse {
+    language_counts: Record<LibraryLanguage, number>;
+    total: number;
+    entries: SignLibraryEntry[];
+}
+
 const FALLBACK_LEARNING_WORDS = [
     "hello",
     "thanks",
@@ -567,6 +590,80 @@ export async function getLanguages(): Promise<string[]> {
         // Fallback or mock data when backend isn't available
         return ["ASL", "TRSL", "PSL"];
     }
+}
+
+function asLibraryLanguage(value: unknown): LibraryLanguage {
+    return asString(value).trim().toUpperCase() === "ASL" ? "ASL" : "TRSL";
+}
+
+function asSignLibraryEntry(value: unknown): SignLibraryEntry | null {
+    if (!value || typeof value !== "object") {
+        return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    const id = asString(record.id).trim();
+    const word = asString(record.word).trim();
+    const videoUrl = asString(record.video_url).trim();
+    if (!id || !word || !videoUrl) {
+        return null;
+    }
+
+    const classId = asNumber(record.class_id, NaN);
+    return {
+        id,
+        language: asLibraryLanguage(record.language),
+        word,
+        display_word: asString(record.display_word, word).trim() || word,
+        translation: asString(record.translation).trim(),
+        class_id: Number.isFinite(classId) ? classId : undefined,
+        clip_count: asNumber(record.clip_count, 0),
+        video_id: asString(record.video_id).trim(),
+        video_url: toAbsoluteApiUrl(videoUrl, API_BASE),
+        dataset: asString(record.dataset).trim(),
+        source: asString(record.source).trim(),
+        split: asString(record.split).trim() || undefined,
+    };
+}
+
+export async function getSignLibrary(
+    language: LibraryLanguage,
+    query = "",
+): Promise<SignLibraryResponse> {
+    const params = new URLSearchParams({ language });
+    const trimmedQuery = query.trim();
+    if (trimmedQuery) {
+        params.set("query", trimmedQuery);
+    }
+
+    const res = await fetch(`${API_BASE}/api/library?${params.toString()}`, {
+        cache: "no-store",
+    });
+    if (!res.ok) {
+        const detail = await readErrorDetail(res);
+        throw new Error(`Failed to fetch sign library: ${detail}`);
+    }
+
+    const payload = (await res.json()) as Record<string, unknown>;
+    const counts =
+        payload.language_counts && typeof payload.language_counts === "object"
+            ? (payload.language_counts as Record<string, unknown>)
+            : {};
+
+    const entries = Array.isArray(payload.entries)
+        ? payload.entries
+              .map(asSignLibraryEntry)
+              .filter((entry): entry is SignLibraryEntry => Boolean(entry))
+        : [];
+
+    return {
+        language_counts: {
+            ASL: asNumber(counts.ASL, 0),
+            TRSL: asNumber(counts.TRSL, 0),
+        },
+        total: asNumber(payload.total, entries.length),
+        entries,
+    };
 }
 
 export async function getLearningWords(): Promise<string[]> {
