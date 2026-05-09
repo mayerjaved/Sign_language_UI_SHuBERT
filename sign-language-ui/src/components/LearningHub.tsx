@@ -23,6 +23,7 @@ import {
     Zap,
 } from "lucide-react";
 import TrslWordRecorder from "@/components/TrslWordRecorder";
+import { useAuth } from "@/components/AuthProvider";
 import {
     confirmLearningAttempt,
     getLearningHealth,
@@ -62,7 +63,6 @@ interface LocalProgress {
     wordMastery: Record<string, WordMastery>;
 }
 
-const USER_STORAGE_KEY = "slai-learning-user-id-v1";
 const PROGRESS_STORAGE_KEY = "slai-learning-progress-v1";
 const LEARNING_LANGUAGE_OPTIONS: LearningLanguageOption[] = [
     { id: "TRSL", label: "Turkish Sign Language (TRSL)", available: true },
@@ -152,6 +152,7 @@ function fallbackChallenge(word: string): LearningWordChallenge {
 }
 
 export default function LearningHub() {
+    const { accessToken, user } = useAuth();
     const [selectedLanguage, setSelectedLanguage] = useState<LearningLanguage>("TRSL");
     const [phase, setPhase] = useState<LearningPhase>("welcome");
     const [words, setWords] = useState<string[]>([]);
@@ -181,19 +182,11 @@ export default function LearningHub() {
         (option) => option.id === selectedLanguage,
     )!;
     const isLearningLanguageAvailable = activeLanguageOption.available;
+    const authOptions = useMemo(() => ({ authToken: accessToken }), [accessToken]);
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
-        const storedUserId = window.localStorage.getItem(USER_STORAGE_KEY);
-        if (storedUserId && storedUserId.trim()) {
-            setUserId(storedUserId);
-            return;
-        }
-
-        const generatedId = `learner-${Math.random().toString(36).slice(2, 10)}`;
-        window.localStorage.setItem(USER_STORAGE_KEY, generatedId);
-        setUserId(generatedId);
-    }, []);
+        setUserId(user?.id ?? "anonymous");
+    }, [user?.id]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -222,7 +215,7 @@ export default function LearningHub() {
         let isMounted = true;
         const loadWords = async () => {
             setIsLoadingWords(true);
-            const availableWords = await getLearningWords();
+            const availableWords = await getLearningWords(authOptions);
             if (isMounted) {
                 setWords(availableWords);
                 setIsLoadingWords(false);
@@ -233,12 +226,12 @@ export default function LearningHub() {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [authOptions]);
 
     useEffect(() => {
         let isMounted = true;
         const checkLearningBackend = async () => {
-            const health = await getLearningHealth();
+            const health = await getLearningHealth(authOptions);
             if (!isMounted) return;
             if (health.status === "ok") {
                 setLearningBackendState("online");
@@ -269,12 +262,12 @@ export default function LearningHub() {
             isMounted = false;
             window.clearInterval(intervalId);
         };
-    }, []);
+    }, [authOptions]);
 
     useEffect(() => {
         let isMounted = true;
         const loadStats = async () => {
-            const stats = await getLearningStats(userId);
+            const stats = await getLearningStats(userId, authOptions);
             if (!isMounted) return;
             setServerAttemptCount(stats.total_attempts);
             setServerAverageScore(stats.avg_score);
@@ -287,7 +280,7 @@ export default function LearningHub() {
         return () => {
             isMounted = false;
         };
-    }, [userId]);
+    }, [authOptions, userId]);
 
     useEffect(() => {
         return () => {
@@ -392,7 +385,7 @@ export default function LearningHub() {
         setIsLoadingChallenge(true);
         setErrorMessage(null);
         try {
-            const next = await getLearningNextWord();
+            const next = await getLearningNextWord(authOptions);
             runChallengeTransition(next);
         } catch (error) {
             const fallbackWord =
@@ -418,7 +411,7 @@ export default function LearningHub() {
         setIsLoadingChallenge(true);
         setErrorMessage(null);
         try {
-            const detail = await getLearningWord(word);
+            const detail = await getLearningWord(word, authOptions);
             runChallengeTransition(detail);
         } catch {
             runChallengeTransition(fallbackChallenge(word));
@@ -507,12 +500,12 @@ export default function LearningHub() {
         });
 
         try {
-            const scoreResponse = await scoreLearningAttempt(clip, challenge.word, userId);
+            const scoreResponse = await scoreLearningAttempt(clip, challenge.word, userId, authOptions);
             setResult(scoreResponse);
             applyProgressUpdate(challenge.word, scoreResponse.feedback.score);
             setPhase("result");
 
-            const freshStats = await getLearningStats(userId);
+            const freshStats = await getLearningStats(userId, authOptions);
             setServerAttemptCount(freshStats.total_attempts);
             setServerAverageScore(freshStats.avg_score);
         } catch (error) {
@@ -531,7 +524,7 @@ export default function LearningHub() {
         if (!result?.attempt_id || isConfirming) return;
         setIsConfirming(true);
         try {
-            await confirmLearningAttempt(result.attempt_id, confirmed, userId);
+            await confirmLearningAttempt(result.attempt_id, confirmed, userId, authOptions);
             setAttemptConfirmation(confirmed ? "yes" : "no");
         } catch (error) {
             const detail =

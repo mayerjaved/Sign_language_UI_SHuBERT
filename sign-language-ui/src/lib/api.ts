@@ -141,6 +141,10 @@ export interface LearningHealth {
     detail?: string;
 }
 
+export interface ApiRequestOptions {
+    authToken?: string | null;
+}
+
 export interface LearningDebugMetric {
     shape?: number[];
     dtype?: string;
@@ -265,6 +269,11 @@ async function readErrorDetail(res: Response): Promise<string> {
     } catch {
         return `${res.status} ${res.statusText}`;
     }
+}
+
+function getAuthHeaders(options?: ApiRequestOptions): HeadersInit | undefined {
+    const token = options?.authToken?.trim();
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 function toAbsoluteApiUrl(pathOrUrl: string, base: string = API_BASE): string {
@@ -666,9 +675,11 @@ export async function getSignLibrary(
     };
 }
 
-export async function getLearningWords(): Promise<string[]> {
+export async function getLearningWords(options: ApiRequestOptions = {}): Promise<string[]> {
     try {
-        const res = await fetch(`${LEARNING_API_BASE}/api/learning/words`);
+        const res = await fetch(`${LEARNING_API_BASE}/api/learning/words`, {
+            headers: getAuthHeaders(options),
+        });
         if (!res.ok) {
             throw new Error(await readErrorDetail(res));
         }
@@ -685,10 +696,11 @@ export async function getLearningWords(): Promise<string[]> {
     }
 }
 
-export async function getLearningHealth(): Promise<LearningHealth> {
+export async function getLearningHealth(options: ApiRequestOptions = {}): Promise<LearningHealth> {
     try {
         const res = await fetch(`${LEARNING_API_BASE}/api/learning/health`, {
             cache: "no-store",
+            headers: getAuthHeaders(options),
         });
         if (!res.ok) {
             throw new Error(await readErrorDetail(res));
@@ -714,8 +726,12 @@ export async function getLearningHealth(): Promise<LearningHealth> {
     }
 }
 
-export async function getLearningNextWord(): Promise<LearningWordChallenge> {
-    const res = await fetch(`${LEARNING_API_BASE}/api/learning/next`);
+export async function getLearningNextWord(
+    options: ApiRequestOptions = {},
+): Promise<LearningWordChallenge> {
+    const res = await fetch(`${LEARNING_API_BASE}/api/learning/next`, {
+        headers: getAuthHeaders(options),
+    });
     if (!res.ok) {
         const detail = await readErrorDetail(res);
         throw new Error(`Failed to fetch learning challenge: ${detail}`);
@@ -723,7 +739,10 @@ export async function getLearningNextWord(): Promise<LearningWordChallenge> {
     return parseLearningWordChallenge(await res.json());
 }
 
-export async function getLearningWord(word: string): Promise<LearningWordChallenge> {
+export async function getLearningWord(
+    word: string,
+    options: ApiRequestOptions = {},
+): Promise<LearningWordChallenge> {
     const normalizedWord = word.trim().toLowerCase();
     if (!normalizedWord) {
         throw new Error("Word is required.");
@@ -732,6 +751,9 @@ export async function getLearningWord(word: string): Promise<LearningWordChallen
     try {
         const res = await fetch(
             `${LEARNING_API_BASE}/api/learning/word/${encodeURIComponent(normalizedWord)}`,
+            {
+                headers: getAuthHeaders(options),
+            },
         );
         if (res.ok) {
             return parseLearningWordChallenge(await res.json());
@@ -753,6 +775,7 @@ export async function scoreLearningAttempt(
     videoBlob: Blob,
     word: string,
     userId = "anonymous",
+    options: ApiRequestOptions = {},
 ): Promise<LearningScoreResponse> {
     const normalizedWord = word.trim().toLowerCase();
     if (!normalizedWord) {
@@ -767,6 +790,7 @@ export async function scoreLearningAttempt(
 
     const res = await fetch(`${LEARNING_API_BASE}/api/learning/score`, {
         method: "POST",
+        headers: getAuthHeaders(options),
         body: formData,
     });
 
@@ -876,6 +900,7 @@ export async function confirmLearningAttempt(
     attemptId: string,
     confirmed: boolean,
     userId = "anonymous",
+    options: ApiRequestOptions = {},
 ): Promise<void> {
     const trimmedId = attemptId.trim();
     if (!trimmedId) {
@@ -888,6 +913,7 @@ export async function confirmLearningAttempt(
 
     const res = await fetch(`${LEARNING_API_BASE}/api/learning/attempt/${trimmedId}/confirm`, {
         method: "POST",
+        headers: getAuthHeaders(options),
         body: formData,
     });
 
@@ -897,10 +923,15 @@ export async function confirmLearningAttempt(
     }
 }
 
-export async function getLearningStats(userId = "anonymous"): Promise<LearningStats> {
+export async function getLearningStats(
+    userId = "anonymous",
+    options: ApiRequestOptions = {},
+): Promise<LearningStats> {
     try {
         const params = new URLSearchParams({ user_id: userId });
-        const res = await fetch(`${LEARNING_API_BASE}/api/learning/stats?${params.toString()}`);
+        const res = await fetch(`${LEARNING_API_BASE}/api/learning/stats?${params.toString()}`, {
+            headers: getAuthHeaders(options),
+        });
         if (!res.ok) {
             throw new Error(await readErrorDetail(res));
         }

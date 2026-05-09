@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
@@ -20,8 +21,10 @@ import {
   Flame,
   GraduationCap,
   Languages,
+  Loader2,
   Lock,
   LogIn,
+  LogOut,
   Mail,
   Medal,
   Play,
@@ -34,6 +37,7 @@ import {
   Video,
   Volume2,
 } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 import {
   getSignLibrary,
   type LibraryLanguage,
@@ -208,7 +212,56 @@ function DemoVideo({ src, className }: { src: string; className?: string }) {
   );
 }
 
+function getInitials(email?: string | null, fullName?: string | null) {
+  const source = fullName?.trim() || email?.split("@")[0] || "Learner";
+  const initials = source
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0]?.toUpperCase())
+    .join("");
+  return initials || "GB";
+}
+
+function AuthStatusScreen({ message }: { message: string }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#f6f8fb] px-4 text-[#102033]">
+      <div className="w-full max-w-md rounded-lg border border-[#d9e2ec] bg-white p-6 text-center shadow-[0_18px_55px_rgba(16,32,51,0.08)]">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[#edf3f8] text-[#14213d]">
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+        </span>
+        <p className="mt-4 text-sm font-semibold text-[#50627a]">{message}</p>
+      </div>
+    </main>
+  );
+}
+
 function PortalShell({ activeSection, eyebrow, title, subtitle, children }: PortalShellProps) {
+  const router = useRouter();
+  const { isConfigured, isLoading, signOut, user } = useAuth();
+  const displayName =
+    typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+  const initials = getInitials(user?.email, displayName);
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace("/");
+    }
+  }, [isLoading, router, user]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace("/");
+  };
+
+  if (!isConfigured) {
+    return <AuthStatusScreen message="Supabase environment variables are not configured yet." />;
+  }
+
+  if (isLoading || !user) {
+    return <AuthStatusScreen message="Checking your session..." />;
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f7fb] text-[#102033]">
       <header className="sticky top-0 z-40 border-b border-[#d9e2ec] bg-white/92 backdrop-blur">
@@ -263,8 +316,19 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
               <Bell className="mx-auto h-5 w-5" aria-hidden="true" />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#e85d5d]" />
             </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#14213d] text-sm font-bold text-white">
-              SG
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="hidden h-10 w-10 items-center justify-center rounded-lg text-[#50627a] transition hover:bg-[#edf3f8] sm:inline-flex"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#14213d] text-sm font-bold text-white"
+              title={user.email ?? "Signed in learner"}
+            >
+              {initials}
             </div>
           </div>
         </div>
@@ -314,9 +378,97 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
 }
 
 export function LoginPage() {
+  const router = useRouter();
+  const {
+    isConfigured,
+    isLoading,
+    signInWithEmail,
+    signInWithGoogle,
+    signUpWithEmail,
+    resetPassword,
+    user,
+  } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isSignup = authMode === "signup";
+
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.replace("/learn");
+    }
+  }, [isLoading, router, user]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+    setStatusMessage(null);
+
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) {
+      setErrorMessage("Email and password are required.");
+      return;
+    }
+    if (isSignup && !fullName.trim()) {
+      setErrorMessage("Full name is required.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (isSignup) {
+        const message = await signUpWithEmail(normalizedEmail, password, fullName.trim());
+        if (message) {
+          setStatusMessage(message);
+          return;
+        }
+      } else {
+        await signInWithEmail(normalizedEmail, password);
+      }
+      router.replace("/learn");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Authentication failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setIsSubmitting(true);
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Google sign-in failed.");
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setErrorMessage(null);
+    setStatusMessage(null);
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setErrorMessage("Enter your email first, then request a reset link.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await resetPassword(normalizedEmail);
+      setStatusMessage("Password reset email sent.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to send reset email.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#f6f8fb] px-4 py-8 text-[#102033] sm:px-6">
@@ -345,6 +497,24 @@ export function LoginPage() {
             </p>
           </div>
 
+            {!isConfigured && (
+              <div className="mt-5 rounded-lg border border-[#f5c2c7] bg-[#fff1f2] px-4 py-3 text-sm font-semibold text-[#9f1239]">
+                Supabase is not configured yet. Add the project URL and publishable key to the environment.
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="mt-5 rounded-lg border border-[#f5c2c7] bg-[#fff1f2] px-4 py-3 text-sm font-semibold text-[#9f1239]">
+                {errorMessage}
+              </div>
+            )}
+
+            {statusMessage && (
+              <div className="mt-5 rounded-lg border border-[#b7eadf] bg-[#ecfdf5] px-4 py-3 text-sm font-semibold text-[#0f766e]">
+                {statusMessage}
+              </div>
+            )}
+
             <div className="mt-6 grid grid-cols-2 rounded-lg bg-[#edf3f8] p-1">
               {(["login", "signup"] as AuthMode[]).map((mode) => (
                 <button
@@ -360,13 +530,15 @@ export function LoginPage() {
               ))}
             </div>
 
-            <form className="mt-6 space-y-4">
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               {isSignup && (
                 <label className="block text-sm font-semibold text-[#102033]">
                   Full Name
                   <span className="mt-2 flex items-center gap-3 rounded-lg border border-[#c9d6e2] bg-white px-4 py-3 focus-within:border-[#2563eb] focus-within:ring-4 focus-within:ring-[#2563eb]/12">
                     <UserPlus className="h-5 w-5 text-[#6b7c90]" aria-hidden="true" />
                     <input
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
                       className="w-full bg-transparent text-sm outline-none placeholder:text-[#8493a5]"
                       placeholder="Sarah Greene"
                       autoComplete="name"
@@ -380,10 +552,13 @@ export function LoginPage() {
                 <span className="mt-2 flex items-center gap-3 rounded-lg border border-[#c9d6e2] bg-white px-4 py-3 focus-within:border-[#2563eb] focus-within:ring-4 focus-within:ring-[#2563eb]/12">
                   <Mail className="h-5 w-5 text-[#6b7c90]" aria-hidden="true" />
                   <input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
                     className="w-full bg-transparent text-sm outline-none placeholder:text-[#8493a5]"
                     placeholder="learner@example.com"
                     type="email"
                     autoComplete="email"
+                    required
                   />
                 </span>
               </label>
@@ -393,10 +568,14 @@ export function LoginPage() {
                 <span className="mt-2 flex items-center gap-3 rounded-lg border border-[#c9d6e2] bg-white px-4 py-3 focus-within:border-[#2563eb] focus-within:ring-4 focus-within:ring-[#2563eb]/12">
                   <Lock className="h-5 w-5 text-[#6b7c90]" aria-hidden="true" />
                   <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
                     className="w-full bg-transparent text-sm outline-none placeholder:text-[#8493a5]"
                     placeholder="Password"
                     type={showPassword ? "text" : "password"}
                     autoComplete={isSignup ? "new-password" : "current-password"}
+                    minLength={6}
+                    required
                   />
                   <button
                     type="button"
@@ -415,23 +594,43 @@ export function LoginPage() {
 
               {!isSignup && (
                 <div className="flex justify-end">
-                  <Link href="/learn" className="text-sm font-semibold text-[#2563eb] hover:text-[#174ea6]">
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={!isConfigured || isSubmitting}
+                    className="text-sm font-semibold text-[#2563eb] hover:text-[#174ea6] disabled:cursor-not-allowed disabled:text-[#8493a5]"
+                  >
                     Forgot password?
-                  </Link>
+                  </button>
                 </div>
               )}
 
-              <Link
-                href="/learn"
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#14213d] px-4 py-3.5 text-sm font-bold text-white shadow-[0_14px_30px_rgba(20,33,61,0.22)] transition hover:bg-[#24385f]"
+              <button
+                type="submit"
+                disabled={!isConfigured || isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#14213d] px-4 py-3.5 text-sm font-bold text-white shadow-[0_14px_30px_rgba(20,33,61,0.22)] transition hover:bg-[#24385f] disabled:cursor-not-allowed disabled:bg-[#9ba7b5] disabled:shadow-none"
               >
-                {isSignup ? "Create Account" : "Sign In"}
-                {isSignup ? (
+                {isSubmitting ? "Working..." : isSignup ? "Create Account" : "Sign In"}
+                {isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : isSignup ? (
                   <UserPlus className="h-4 w-4" aria-hidden="true" />
                 ) : (
                   <LogIn className="h-4 w-4" aria-hidden="true" />
                 )}
-              </Link>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={!isConfigured || isSubmitting}
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-[#c9d6e2] bg-white px-4 py-3.5 text-sm font-bold text-[#102033] transition hover:bg-[#f7fafc] disabled:cursor-not-allowed disabled:text-[#8493a5]"
+              >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#d9e2ec] text-xs font-black">
+                  G
+                </span>
+                Continue with Google
+              </button>
             </form>
 
             <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#d9e2ec] pt-5 text-sm">
