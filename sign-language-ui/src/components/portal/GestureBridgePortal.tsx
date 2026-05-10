@@ -14,8 +14,6 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  ChevronDown,
-  Clock,
   Eye,
   EyeOff,
   Flame,
@@ -27,15 +25,12 @@ import {
   LogOut,
   Mail,
   Medal,
-  Play,
   Search,
-  Sparkles,
   Star,
   Target,
   Trophy,
   UserPlus,
   Video,
-  Volume2,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import {
@@ -62,17 +57,6 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-interface SignCard {
-  word: string;
-  topic: string;
-  language: "ASL" | "TRSL";
-  level: "Starter" | "Intermediate" | "Advanced";
-  duration: string;
-  progress: number;
-  videoSrc: string;
-  accent: string;
-}
-
 interface MasteryItem {
   word: string;
   value: number;
@@ -83,69 +67,6 @@ const navItems: NavItem[] = [
   { id: "learn", label: "Learn", href: "/learn", icon: GraduationCap },
   { id: "library", label: "Library", href: "/library", icon: BookOpen },
   { id: "progress", label: "Progress", href: "/progress", icon: BarChart3 },
-];
-
-const signCards: SignCard[] = [
-  {
-    word: "Hello",
-    topic: "Greetings",
-    language: "ASL",
-    level: "Starter",
-    duration: "0:04",
-    progress: 96,
-    videoSrc: "/demo/asl-message.mp4",
-    accent: "bg-[#e8f3ff] text-[#075985]",
-  },
-  {
-    word: "Thank You",
-    topic: "Greetings",
-    language: "ASL",
-    level: "Starter",
-    duration: "0:06",
-    progress: 100,
-    videoSrc: "/demo/asl-message.mp4",
-    accent: "bg-[#e8fff7] text-[#047857]",
-  },
-  {
-    word: "Help",
-    topic: "Emergency",
-    language: "TRSL",
-    level: "Intermediate",
-    duration: "0:05",
-    progress: 82,
-    videoSrc: "/demo/trsl-message.mp4",
-    accent: "bg-[#fff3dc] text-[#92400e]",
-  },
-  {
-    word: "Family",
-    topic: "People",
-    language: "ASL",
-    level: "Starter",
-    duration: "0:07",
-    progress: 88,
-    videoSrc: "/demo/asl-message.mp4",
-    accent: "bg-[#f1ecff] text-[#5b21b6]",
-  },
-  {
-    word: "Water",
-    topic: "Daily Needs",
-    language: "TRSL",
-    level: "Starter",
-    duration: "0:03",
-    progress: 61,
-    videoSrc: "/demo/trsl-message.mp4",
-    accent: "bg-[#e6fffb] text-[#0f766e]",
-  },
-  {
-    word: "Please",
-    topic: "Manners",
-    language: "ASL",
-    level: "Starter",
-    duration: "0:05",
-    progress: 34,
-    videoSrc: "/demo/asl-message.mp4",
-    accent: "bg-[#fff1f2] text-[#be123c]",
-  },
 ];
 
 const masteryItems: MasteryItem[] = [
@@ -192,23 +113,6 @@ function ProgressRing({ value, color }: { value: number; color: string }) {
         strokeWidth="8"
       />
     </svg>
-  );
-}
-
-function DemoVideo({ src, className }: { src: string; className?: string }) {
-  return (
-    <video
-      className={className}
-      src={src}
-      autoPlay
-      muted
-      loop
-      playsInline
-      preload="metadata"
-      aria-label="Sign language lesson preview"
-    >
-      <track kind="captions" srcLang="en" label="English captions" />
-    </video>
   );
 }
 
@@ -646,71 +550,180 @@ export function LoginPage() {
 }
 
 export function LearnPage() {
+  const [selectedLanguage, setSelectedLanguage] = useState<LibraryLanguage>("TRSL");
+  const [query, setQuery] = useState("");
+  const [entries, setEntries] = useState<SignLibraryEntry[]>([]);
+  const [counts, setCounts] = useState<Record<LibraryLanguage, number>>({ ASL: 0, TRSL: 0 });
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadLibrary = async () => {
+      setIsLoading(true);
+      setErrorMessage(null);
+      try {
+        const response = await getSignLibrary(selectedLanguage);
+        if (!isMounted) return;
+        setEntries(response.entries);
+        setCounts(response.language_counts);
+        setSelectedEntryId((current) =>
+          current && response.entries.some((entry) => entry.id === current)
+            ? current
+            : response.entries[0]?.id ?? null,
+        );
+      } catch (error) {
+        if (!isMounted) return;
+        setEntries([]);
+        setSelectedEntryId(null);
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "Unable to load learning words from the library API.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadLibrary();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedLanguage]);
+
+  useEffect(() => {
+    setQuery("");
+    setSelectedEntryId(null);
+  }, [selectedLanguage]);
+
+  const filteredEntries = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return entries;
+    return entries.filter((entry) =>
+      [
+        entry.word,
+        entry.display_word,
+        entry.translation,
+        entry.language,
+        entry.dataset,
+        entry.source,
+      ].some((value) => value.toLowerCase().includes(normalized)),
+    );
+  }, [entries, query]);
+
+  const selectedEntry =
+    entries.find((entry) => entry.id === selectedEntryId) ?? filteredEntries[0] ?? entries[0] ?? null;
+  const wordDeck = filteredEntries.slice(0, 80);
+
+  const handleNextWord = () => {
+    const source = filteredEntries.length > 0 ? filteredEntries : entries;
+    if (source.length === 0) return;
+    const currentIndex = selectedEntry
+      ? source.findIndex((entry) => entry.id === selectedEntry.id)
+      : -1;
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % source.length : 0;
+    setSelectedEntryId(source[nextIndex].id);
+  };
+
   return (
     <PortalShell
       activeSection="learn"
       eyebrow="Learning"
-      title="Practice signs with guided feedback"
-      subtitle="Watch a reference sign, record your attempt, and keep your daily learning rhythm moving."
+      title="Practice a selected word"
+      subtitle="Pick ASL or TRSL, choose a word from the dataset, then watch the matching reference clip before recording your attempt."
     >
-      <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <label className="relative w-full sm:w-auto">
-          <span className="sr-only">Select sign language</span>
-          <select className="w-full appearance-none rounded-lg border border-[#c9d6e2] bg-white py-3 pl-4 pr-11 text-sm font-bold text-[#14213d] outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/12 sm:w-[280px]">
-            <option>ASL - American Sign Language</option>
-            <option>TRSL - Turkish Sign Language</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#50627a]" />
-        </label>
-
-        <div className="flex items-center gap-3 rounded-lg border border-[#d9e2ec] bg-white px-4 py-3 shadow-sm">
-          <IconBadge icon={Flame} className="bg-[#fff3dc] text-[#c2410c]" />
-          <div className="min-w-[150px]">
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="font-semibold text-[#5d6b7c]">Daily Goal</span>
-              <span className="font-bold text-[#0f766e]">75%</span>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#d9e2ec]">
-              <div className="h-full w-3/4 rounded-full bg-[#0f766e]" />
-            </div>
+      <section className="mb-6 rounded-lg border border-[#d9e2ec] bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex rounded-lg bg-[#edf3f8] p-1">
+            {(["TRSL", "ASL"] as LibraryLanguage[]).map((language) => (
+              <button
+                key={language}
+                type="button"
+                onClick={() => setSelectedLanguage(language)}
+                className={`rounded-md px-4 py-2 text-sm font-bold transition ${
+                  selectedLanguage === language
+                    ? "bg-white text-[#102033] shadow-sm"
+                    : "text-[#5d6b7c] hover:text-[#102033]"
+                }`}
+              >
+                {language}
+                <span className="ml-2 text-xs font-semibold text-[#6b7c90]">
+                  {counts[language].toLocaleString()}
+                </span>
+              </button>
+            ))}
           </div>
+
+          <label className="relative w-full lg:max-w-md">
+            <span className="sr-only">Search words</span>
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#6b7c90]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="w-full rounded-lg border border-[#c9d6e2] bg-white py-3 pl-12 pr-4 text-sm outline-none transition placeholder:text-[#8493a5] focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/12"
+              placeholder={`Search ${selectedLanguage} words`}
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#5d6b7c]">
+          <span className="font-semibold text-[#102033]">
+            {isLoading
+              ? "Loading words..."
+              : `${filteredEntries.length.toLocaleString()} matching ${selectedLanguage} words`}
+          </span>
+          <span className="h-1 w-1 rounded-full bg-[#9aabbc]" />
+          <span>Reference clip updates whenever the selected word changes.</span>
         </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
         <div className="overflow-hidden rounded-lg border border-[#d9e2ec] bg-white shadow-sm">
           <div className="relative aspect-video bg-[#132238]">
-            <DemoVideo src="/demo/asl-message.mp4" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(19,34,56,0.05),rgba(19,34,56,0.72))]" />
-            <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-              <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-white/30">
-                <div className="h-full w-[42%] rounded-full bg-[#96f2df]" />
+            {isLoading ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-white" aria-hidden="true" />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <button
-                    type="button"
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#132238]"
-                    aria-label="Play lesson"
-                  >
-                    <Play className="h-5 w-5 fill-current" aria-hidden="true" />
-                  </button>
-                  <button type="button" className="text-white" aria-label="Volume">
-                    <Volume2 className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <span className="text-sm font-semibold">01:24 / 04:05</span>
-                </div>
-                <span className="rounded-full bg-white/18 px-3 py-1 text-xs font-bold backdrop-blur">
-                  Hello - ASL
-                </span>
+            ) : selectedEntry ? (
+              <video
+                key={selectedEntry.id}
+                src={selectedEntry.video_url}
+                controls
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-contain"
+              >
+                <track kind="captions" srcLang="en" label="English captions" />
+              </video>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center p-6 text-center text-sm font-semibold text-white">
+                No reference clip is available for this selection.
               </div>
-            </div>
+            )}
           </div>
+
           <div className="grid gap-4 p-5 md:grid-cols-3">
             {[
-              { label: "Current word", value: "Hello", icon: Sparkles },
-              { label: "Session", value: "7 min", icon: Clock },
-              { label: "Target score", value: "90%", icon: Target },
+              {
+                label: "Current word",
+                value: selectedEntry?.display_word ?? "Select a word",
+                icon: BookOpen,
+              },
+              {
+                label: "Language",
+                value: selectedEntry?.language ?? selectedLanguage,
+                icon: Languages,
+              },
+              {
+                label: "Dataset clips",
+                value: selectedEntry ? selectedEntry.clip_count.toLocaleString() : "0",
+                icon: Video,
+              },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -744,6 +757,7 @@ export function LearnPage() {
 
           <button
             type="button"
+            disabled={!selectedEntry}
             className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-3.5 text-sm font-bold text-white transition hover:bg-[#0b5d57]"
           >
             <Camera className="h-4 w-4" aria-hidden="true" />
@@ -751,26 +765,69 @@ export function LearnPage() {
           </button>
 
           <div className="mt-5 border-t border-[#d9e2ec] pt-5">
-            <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-[#5d6b7c]">
-              Today Deck
-            </h3>
-            <div className="mt-3 space-y-2">
-              {signCards.slice(0, 4).map((card) => (
-                <Link
-                  href="/library"
-                  key={card.word}
-                  className="flex items-center justify-between rounded-lg border border-[#e3ebf3] bg-[#f7fafc] px-3 py-2 transition hover:border-[#c9d6e2] hover:bg-white"
-                >
-                  <span>
-                    <span className="block text-sm font-bold text-[#102033]">{card.word}</span>
-                    <span className="block text-xs text-[#5d6b7c]">
-                      {card.topic} - {card.language}
-                    </span>
-                  </span>
-                  <span className="text-sm font-bold text-[#0f766e]">{card.progress}%</span>
-                </Link>
-              ))}
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-[#5d6b7c]">
+                Word Deck
+              </h3>
+              <button
+                type="button"
+                onClick={handleNextWord}
+                disabled={isLoading || entries.length === 0}
+                className="rounded-lg border border-[#c9d6e2] px-3 py-1.5 text-xs font-bold text-[#29425f] transition hover:bg-[#edf3f8] disabled:opacity-50"
+              >
+                Next Word
+              </button>
             </div>
+
+            {errorMessage ? (
+              <div className="mt-3 rounded-lg border border-[#f1b7b7] bg-[#fff7f7] p-3 text-sm text-[#8a2525]">
+                {errorMessage}
+              </div>
+            ) : (
+              <div className="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                {isLoading ? (
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="h-[58px] animate-pulse rounded-lg border border-[#e3ebf3] bg-[#f7fafc]"
+                    />
+                  ))
+                ) : wordDeck.length === 0 ? (
+                  <p className="rounded-lg border border-[#e3ebf3] bg-[#f7fafc] p-3 text-sm text-[#5d6b7c]">
+                    No words match that search.
+                  </p>
+                ) : (
+                  wordDeck.map((entry) => {
+                    const isSelected = selectedEntry?.id === entry.id;
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => setSelectedEntryId(entry.id)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition ${
+                          isSelected
+                            ? "border-[#0f766e] bg-[#e8fff7]"
+                            : "border-[#e3ebf3] bg-[#f7fafc] hover:border-[#c9d6e2] hover:bg-white"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-[#102033]">
+                            {entry.display_word}
+                          </span>
+                          <span className="block truncate text-xs text-[#5d6b7c]">
+                            {entry.translation ? `${entry.translation} - ` : ""}
+                            {entry.clip_count.toLocaleString()} clips
+                          </span>
+                        </span>
+                        <span className="ml-3 rounded-full bg-white px-2 py-1 text-xs font-bold text-[#0f766e]">
+                          {entry.language}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         </aside>
       </section>
