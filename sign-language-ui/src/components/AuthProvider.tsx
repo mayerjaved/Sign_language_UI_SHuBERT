@@ -12,7 +12,8 @@ import {
 } from "react";
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getSupabaseConfigurationError, isSupabaseConfigured } from "@/lib/supabase/config";
+import { getSupabaseErrorMessage, toSupabaseError } from "@/lib/supabase/errors";
 import {
     endAppSession,
     recordPageView,
@@ -22,6 +23,7 @@ import {
 
 interface AuthContextValue {
     accessToken: string | null;
+    configurationError: string | null;
     isConfigured: boolean;
     isLoading: boolean;
     session: Session | null;
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [supabase] = useState<SupabaseClient | null>(() =>
         isSupabaseConfigured ? createClient() : null,
     );
+    const [configurationError, setConfigurationError] = useState<string | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [isLoading, setIsLoading] = useState(isSupabaseConfigured);
     const appSessionIdRef = useRef<string | null>(null);
@@ -57,9 +60,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         let isMounted = true;
-        void supabase.auth.getSession().then(({ data }) => {
+        void getSupabaseConfigurationError().then((message) => {
+            if (!isMounted || !message) return;
+            setConfigurationError(message);
+        });
+
+        void supabase.auth.getSession().then(({ data, error }) => {
             if (!isMounted) return;
+            if (error) {
+                setConfigurationError(getSupabaseErrorMessage(error, "Unable to check your session."));
+            }
             setSession(data.session);
+            setIsLoading(false);
+        }).catch((error: unknown) => {
+            if (!isMounted) return;
+            setConfigurationError(getSupabaseErrorMessage(error, "Unable to check your session."));
             setIsLoading(false);
         });
 
@@ -148,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 email,
                 password,
             });
-            if (error) throw error;
+            if (error) throw toSupabaseError(error, "Sign in failed.");
         },
         [supabase],
     );
@@ -167,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     emailRedirectTo: getRedirectUrl("/auth/callback?next=/learn"),
                 },
             });
-            if (error) throw error;
+            if (error) throw toSupabaseError(error, "Sign up failed.");
             return data.session ? null : "Check your email to confirm your account before signing in.";
         },
         [supabase],
@@ -182,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 redirectTo: getRedirectUrl("/auth/callback?next=/learn"),
             },
         });
-        if (error) throw error;
+        if (error) throw toSupabaseError(error, "Google sign-in failed.");
     }, [supabase]);
 
     const resetPassword = useCallback(
@@ -192,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: getRedirectUrl("/auth/callback?next=/learn"),
             });
-            if (error) throw error;
+            if (error) throw toSupabaseError(error, "Unable to send reset email.");
         },
         [supabase],
     );
@@ -200,12 +215,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signOut = useCallback(async () => {
         if (!supabase) return;
         const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        if (error) throw toSupabaseError(error, "Unable to sign out.");
     }, [supabase]);
 
     const value = useMemo<AuthContextValue>(
         () => ({
             accessToken: session?.access_token ?? null,
+            configurationError,
             isConfigured: isSupabaseConfigured,
             isLoading,
             session,
@@ -217,6 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             signOut,
         }),
         [
+            configurationError,
             isLoading,
             resetPassword,
             session,

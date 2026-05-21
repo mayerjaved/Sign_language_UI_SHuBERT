@@ -142,7 +142,7 @@ function AuthStatusScreen({ message }: { message: string }) {
 
 function PortalShell({ activeSection, eyebrow, title, subtitle, children }: PortalShellProps) {
   const router = useRouter();
-  const { isConfigured, isLoading, signOut, user } = useAuth();
+  const { configurationError, isConfigured, isLoading, signOut, user } = useAuth();
   const displayName =
     typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
   const initials = getInitials(user?.email, displayName);
@@ -160,6 +160,10 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
 
   if (!isConfigured) {
     return <AuthStatusScreen message="Supabase environment variables are not configured yet." />;
+  }
+
+  if (configurationError) {
+    return <AuthStatusScreen message={configurationError} />;
   }
 
   if (isLoading || !user) {
@@ -290,6 +294,7 @@ export function LoginPage() {
     signInWithGoogle,
     signUpWithEmail,
     resetPassword,
+    configurationError,
     user,
   } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -301,6 +306,8 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSignup = authMode === "signup";
+  const authMessage = errorMessage ?? configurationError;
+  const isAuthUnavailable = !isConfigured || Boolean(configurationError);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -407,9 +414,9 @@ export function LoginPage() {
               </div>
             )}
 
-            {errorMessage && (
+            {authMessage && (
               <div className="mt-5 rounded-lg border border-[#f5c2c7] bg-[#fff1f2] px-4 py-3 text-sm font-semibold text-[#9f1239]">
-                {errorMessage}
+                {authMessage}
               </div>
             )}
 
@@ -501,7 +508,7 @@ export function LoginPage() {
                   <button
                     type="button"
                     onClick={handlePasswordReset}
-                    disabled={!isConfigured || isSubmitting}
+                    disabled={isAuthUnavailable || isSubmitting}
                     className="text-sm font-semibold text-[#2563eb] hover:text-[#174ea6] disabled:cursor-not-allowed disabled:text-[#8493a5]"
                   >
                     Forgot password?
@@ -511,7 +518,7 @@ export function LoginPage() {
 
               <button
                 type="submit"
-                disabled={!isConfigured || isSubmitting}
+                disabled={isAuthUnavailable || isSubmitting}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#14213d] px-4 py-3.5 text-sm font-bold text-white shadow-[0_14px_30px_rgba(20,33,61,0.22)] transition hover:bg-[#24385f] disabled:cursor-not-allowed disabled:bg-[#9ba7b5] disabled:shadow-none"
               >
                 {isSubmitting ? "Working..." : isSignup ? "Create Account" : "Sign In"}
@@ -527,7 +534,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                disabled={!isConfigured || isSubmitting}
+                disabled={isAuthUnavailable || isSubmitting}
                 className="flex w-full items-center justify-center gap-3 rounded-lg border border-[#c9d6e2] bg-white px-4 py-3.5 text-sm font-bold text-[#102033] transition hover:bg-[#f7fafc] disabled:cursor-not-allowed disabled:text-[#8493a5]"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#d9e2ec] text-xs font-black">
@@ -543,6 +550,7 @@ export function LoginPage() {
                 TranslationDemo
               </Link>
             </div>
+
         </div>
       </div>
     </main>
