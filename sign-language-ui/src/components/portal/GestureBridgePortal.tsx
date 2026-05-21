@@ -254,10 +254,11 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
             <button
               type="button"
               onClick={handleSignOut}
-              className="hidden h-10 w-10 items-center justify-center rounded-lg text-[#50627a] transition hover:bg-[#edf3f8] sm:inline-flex"
+              className="hidden h-10 items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8] sm:inline-flex"
               aria-label="Sign out"
             >
-              <LogOut className="h-5 w-5" aria-hidden="true" />
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              Sign Out
             </button>
             <div
               className="flex h-10 w-10 items-center justify-center rounded-full bg-[#14213d] text-sm font-bold text-white"
@@ -287,7 +288,7 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
         className="fixed bottom-0 left-0 z-50 w-full border-t border-[#d9e2ec] bg-white px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2 shadow-[0_-12px_30px_rgba(16,32,51,0.08)] md:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
+        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.id === activeSection;
@@ -306,6 +307,14 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-[#5d6b7c] transition hover:bg-[#edf3f8] hover:text-[#102033]"
+          >
+            <LogOut className="h-5 w-5" aria-hidden="true" />
+            Sign Out
+          </button>
         </div>
       </nav>
     </div>
