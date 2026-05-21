@@ -612,6 +612,18 @@ export function LoginPage() {
               </button>
             </form>
 
+            <form action="/auth/demo" method="post" className="mt-3">
+              <input type="hidden" name="next" value="/learn" />
+              <button
+                type="submit"
+                disabled={isAuthUnavailable || isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-3.5 text-sm font-bold text-white transition hover:bg-[#0b5d57] disabled:cursor-not-allowed disabled:bg-[#9ba7b5]"
+              >
+                Try Demo Account
+                <GraduationCap className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </form>
+
         </div>
       </div>
     </main>

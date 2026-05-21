@@ -1,0 +1,6 @@
+logs/
+.next/
+node_modules/
+.env*
+*.tsbuildinfo
+tmp_ui_test.webm

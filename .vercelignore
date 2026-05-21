@@ -1,0 +1,6 @@
+sign-language-ui/logs/
+sign-language-ui/.next/
+sign-language-ui/node_modules/
+sign-language-ui/.env*
+sign-language-ui/*.tsbuildinfo
+sign-language-ui/tmp_ui_test.webm

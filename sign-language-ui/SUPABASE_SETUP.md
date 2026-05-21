@@ -9,7 +9,12 @@ Add these to `.env.local` for local development and to Vercel project environmen
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://hqocuvbgloogqnrboxgp.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
+DEMO_ACCOUNT_EMAIL=demo@your-domain.com
+DEMO_ACCOUNT_PASSWORD=your_demo_account_password
 ```
+
+Create and confirm the demo user in Supabase Auth first. Keep `DEMO_ACCOUNT_EMAIL` and
+`DEMO_ACCOUNT_PASSWORD` server-only; do not prefix them with `NEXT_PUBLIC_`.
 
 For the local FastAPI backend, use backend-only environment variables:
 
