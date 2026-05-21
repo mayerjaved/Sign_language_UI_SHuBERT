@@ -127,6 +127,39 @@ function getInitials(email?: string | null, fullName?: string | null) {
   return initials || "GB";
 }
 
+function getAuthRedirectMessage(params: URLSearchParams) {
+  const error = params.get("auth_error") ?? params.get("error");
+  const errorCode = params.get("auth_error_code") ?? params.get("error_code");
+  const description = params.get("auth_error_description") ?? params.get("error_description");
+
+  if (!error && !errorCode && !description) {
+    return null;
+  }
+
+  if (errorCode === "otp_expired" || /invalid|expired/i.test(description ?? error ?? "")) {
+    return "That confirmation link is invalid or expired. Use the newest email link, or sign up again to send a fresh confirmation email.";
+  }
+
+  return description ?? error ?? "Authentication failed. Please try again.";
+}
+
+function getAuthRedirectErrorFromLocation() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const queryMessage = getAuthRedirectMessage(new URLSearchParams(window.location.search));
+  if (queryMessage) {
+    return queryMessage;
+  }
+
+  if (!window.location.hash.startsWith("#")) {
+    return null;
+  }
+
+  return getAuthRedirectMessage(new URLSearchParams(window.location.hash.slice(1)));
+}
+
 function AuthStatusScreen({ message }: { message: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f6f8fb] px-4 text-[#102033]">
@@ -200,12 +233,6 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
                 </Link>
               );
             })}
-            <Link
-              href="/TranslationDemo"
-              className="ml-2 rounded-lg border border-[#c9d6e2] px-4 py-2 text-sm font-semibold text-[#29425f] transition hover:bg-[#edf3f8]"
-            >
-              Translation Demo
-            </Link>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -293,6 +320,7 @@ export function LoginPage() {
     signInWithEmail,
     signInWithGoogle,
     signUpWithEmail,
+    resendSignUpConfirmation,
     resetPassword,
     configurationError,
     user,
@@ -307,7 +335,17 @@ export function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSignup = authMode === "signup";
   const authMessage = errorMessage ?? configurationError;
+  const canResendConfirmation = Boolean(errorMessage?.toLowerCase().includes("confirmation link"));
   const isAuthUnavailable = !isConfigured || Boolean(configurationError);
+
+  useEffect(() => {
+    const redirectError = getAuthRedirectErrorFromLocation();
+    if (!redirectError) return;
+
+    setErrorMessage(redirectError);
+    setStatusMessage(null);
+    window.history.replaceState(null, "", window.location.pathname || "/");
+  }, []);
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -381,6 +419,26 @@ export function LoginPage() {
     }
   };
 
+  const handleResendConfirmation = async () => {
+    setErrorMessage(null);
+    setStatusMessage(null);
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setErrorMessage("Enter your email first, then send a new confirmation email.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await resendSignUpConfirmation(normalizedEmail);
+      setStatusMessage("Confirmation email sent. Use the newest link in your inbox.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to send confirmation email.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#f6f8fb] px-4 py-8 text-[#102033] sm:px-6">
       <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-md flex-col justify-center">
@@ -416,7 +474,17 @@ export function LoginPage() {
 
             {authMessage && (
               <div className="mt-5 rounded-lg border border-[#f5c2c7] bg-[#fff1f2] px-4 py-3 text-sm font-semibold text-[#9f1239]">
-                {authMessage}
+                <p>{authMessage}</p>
+                {canResendConfirmation && (
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={isAuthUnavailable || isSubmitting}
+                    className="mt-3 rounded-md border border-[#f3a7b3] bg-white px-3 py-2 text-xs font-bold text-[#9f1239] transition hover:bg-[#fff7f8] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Send New Confirmation Email
+                  </button>
+                )}
               </div>
             )}
 
@@ -543,13 +611,6 @@ export function LoginPage() {
                 Continue with Google
               </button>
             </form>
-
-            <div className="mt-6 flex items-center justify-between gap-3 border-t border-[#d9e2ec] pt-5 text-sm">
-              <span className="text-[#5d6b7c]">Need the original translator?</span>
-              <Link href="/TranslationDemo" className="font-bold text-[#0f766e] hover:text-[#0b5d57]">
-                TranslationDemo
-              </Link>
-            </div>
 
         </div>
       </div>

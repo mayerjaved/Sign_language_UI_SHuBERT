@@ -703,6 +703,25 @@ $tunnelUrl = Start-QuickTunnelAndGetUrl
 Write-Host "Tunnel URL: $tunnelUrl" -ForegroundColor Green
 
 try {
+  if ($env:NEXT_PUBLIC_SUPABASE_URL) {
+    $resolvedSupabaseUrl = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -envKey "NEXT_PUBLIC_SUPABASE_URL" -envValue $env:NEXT_PUBLIC_SUPABASE_URL
+    Write-Host "Updated NEXT_PUBLIC_SUPABASE_URL for project '$($resolvedSupabaseUrl.idOrName)' (teamId '$($resolvedSupabaseUrl.teamId)', slug '$($resolvedSupabaseUrl.teamSlug)')." -ForegroundColor Green
+  } else {
+    Write-Host "NEXT_PUBLIC_SUPABASE_URL is not set locally; leaving Vercel Supabase URL unchanged." -ForegroundColor Yellow
+  }
+
+  $supabasePublishableKey = $env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  if (-not $supabasePublishableKey -and $env:NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    $supabasePublishableKey = $env:NEXT_PUBLIC_SUPABASE_ANON_KEY
+  }
+
+  if ($supabasePublishableKey) {
+    $resolvedSupabaseKey = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -envKey "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" -envValue $supabasePublishableKey
+    Write-Host "Updated NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY for project '$($resolvedSupabaseKey.idOrName)' (teamId '$($resolvedSupabaseKey.teamId)', slug '$($resolvedSupabaseKey.teamSlug)')." -ForegroundColor Green
+  } else {
+    Write-Host "No local Supabase publishable key found; leaving Vercel Supabase key unchanged." -ForegroundColor Yellow
+  }
+
   $resolvedApi = Upsert-VercelEnvBestEffort -projectId $env:VERCEL_PROJECT_ID -projectName $env:VERCEL_PROJECT_NAME -teamId $env:VERCEL_TEAM_ID -teamSlug $env:VERCEL_TEAM_SLUG -token $env:VERCEL_TOKEN -envKey "NEXT_PUBLIC_API_URL" -envValue $tunnelUrl
   Write-Host "Updated NEXT_PUBLIC_API_URL for project '$($resolvedApi.idOrName)' (teamId '$($resolvedApi.teamId)', slug '$($resolvedApi.teamSlug)')." -ForegroundColor Green
 
@@ -713,7 +732,7 @@ try {
   Write-Host "Done. The UI should be live once the deploy finishes." -ForegroundColor Green
 } catch {
   Write-Host "Vercel env update failed. Backend + tunnel are running." -ForegroundColor Yellow
-  Write-Host "Manual step: set NEXT_PUBLIC_API_URL and NEXT_PUBLIC_LEARNING_API_URL in Vercel to $tunnelUrl and redeploy." -ForegroundColor Yellow
+  Write-Host "Manual step: set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, NEXT_PUBLIC_API_URL, and NEXT_PUBLIC_LEARNING_API_URL in Vercel, then redeploy." -ForegroundColor Yellow
   if ($env:VERCEL_DEPLOY_HOOK_URL) {
     Write-Host "Deploy hook is set, but env update failed; redeploy manually after updating the env var." -ForegroundColor Yellow
   }

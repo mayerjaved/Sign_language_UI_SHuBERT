@@ -30,6 +30,7 @@ interface AuthContextValue {
     user: User | null;
     signInWithEmail: (email: string, password: string) => Promise<void>;
     signUpWithEmail: (email: string, password: string, fullName: string) => Promise<string | null>;
+    resendSignUpConfirmation: (email: string) => Promise<void>;
     signInWithGoogle: () => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
     signOut: () => Promise<void>;
@@ -188,6 +189,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         [supabase],
     );
 
+    const resendSignUpConfirmation = useCallback(
+        async (email: string) => {
+            if (!supabase) throw new Error("Supabase is not configured.");
+
+            const { error } = await supabase.auth.resend({
+                type: "signup",
+                email,
+                options: {
+                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/learn"),
+                },
+            });
+            if (error) throw toSupabaseError(error, "Unable to send confirmation email.");
+        },
+        [supabase],
+    );
+
     const signInWithGoogle = useCallback(async () => {
         if (!supabase) throw new Error("Supabase is not configured.");
 
@@ -228,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user: session?.user ?? null,
             signInWithEmail,
             signUpWithEmail,
+            resendSignUpConfirmation,
             signInWithGoogle,
             resetPassword,
             signOut,
@@ -235,6 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         [
             configurationError,
             isLoading,
+            resendSignUpConfirmation,
             resetPassword,
             session,
             signInWithEmail,
