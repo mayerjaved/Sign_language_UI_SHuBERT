@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -176,6 +176,8 @@ function AuthStatusScreen({ message }: { message: string }) {
 function PortalShell({ activeSection, eyebrow, title, subtitle, children }: PortalShellProps) {
   const router = useRouter();
   const { configurationError, isConfigured, isLoading, signOut, user } = useAuth();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const displayName =
     typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
   const initials = getInitials(user?.email, displayName);
@@ -186,7 +188,31 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
     }
   }, [isLoading, router, user]);
 
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (userMenuRef.current?.contains(event.target as Node)) return;
+      setIsUserMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isUserMenuOpen]);
+
   const handleSignOut = async () => {
+    setIsUserMenuOpen(false);
     await signOut();
     router.replace("/");
   };
@@ -251,20 +277,45 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
               <Bell className="mx-auto h-5 w-5" aria-hidden="true" />
               <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#e85d5d]" />
             </button>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="hidden h-10 items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8] sm:inline-flex"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4 w-4" aria-hidden="true" />
-              Sign Out
-            </button>
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#14213d] text-sm font-bold text-white"
-              title={user.email ?? "Signed in learner"}
-            >
-              {initials}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsUserMenuOpen((current) => !current)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#14213d] text-sm font-bold text-white shadow-sm transition hover:bg-[#24385f] focus:outline-none focus:ring-4 focus:ring-[#2563eb]/20"
+                title={user.email ?? "Signed in learner"}
+                aria-label="Open account menu"
+                aria-haspopup="menu"
+                aria-expanded={isUserMenuOpen}
+              >
+                {initials}
+              </button>
+
+              {isUserMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-lg border border-[#d9e2ec] bg-white text-[#102033] shadow-[0_18px_45px_rgba(16,32,51,0.16)]"
+                >
+                  <div className="border-b border-[#e3ebf3] px-4 py-3">
+                    <p className="truncate text-sm font-bold">
+                      {displayName ?? "GestureBridge learner"}
+                    </p>
+                    {user.email && (
+                      <p className="mt-1 truncate text-xs font-semibold text-[#5d6b7c]">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleSignOut}
+                    className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -288,7 +339,7 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
         className="fixed bottom-0 left-0 z-50 w-full border-t border-[#d9e2ec] bg-white px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2 shadow-[0_-12px_30px_rgba(16,32,51,0.08)] md:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
+        <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.id === activeSection;
@@ -307,14 +358,6 @@ function PortalShell({ activeSection, eyebrow, title, subtitle, children }: Port
               </Link>
             );
           })}
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-[#5d6b7c] transition hover:bg-[#edf3f8] hover:text-[#102033]"
-          >
-            <LogOut className="h-5 w-5" aria-hidden="true" />
-            Sign Out
-          </button>
         </div>
       </nav>
     </div>
