@@ -208,6 +208,7 @@ export interface SignLibraryEntry {
     id: string;
     language: LibraryLanguage;
     word: string;
+    learning_word?: string;
     display_word: string;
     translation: string;
     class_id?: number;
@@ -624,6 +625,7 @@ function asSignLibraryEntry(value: unknown): SignLibraryEntry | null {
         id,
         language: asLibraryLanguage(record.language),
         word,
+        learning_word: asString(record.learning_word).trim() || undefined,
         display_word: asString(record.display_word, word).trim() || word,
         translation: asString(record.translation).trim(),
         class_id: Number.isFinite(classId) ? classId : undefined,

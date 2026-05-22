@@ -164,6 +164,24 @@ function getAuthRedirectErrorFromLocation() {
   return getAuthRedirectMessage(new URLSearchParams(window.location.hash.slice(1)));
 }
 
+function toLearningWordKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function getLearningScoreWord(entry: SignLibraryEntry) {
+  if (entry.learning_word) {
+    return entry.learning_word;
+  }
+  if (entry.language === "TRSL" && entry.translation) {
+    return toLearningWordKey(entry.translation);
+  }
+  return toLearningWordKey(entry.word);
+}
+
 function AuthStatusScreen({ message }: { message: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f6f8fb] px-4 text-[#102033]">
@@ -825,7 +843,7 @@ export function LearnPage() {
     try {
       const scoreResponse = await scoreLearningAttempt(
         clip,
-        targetEntry.word,
+        getLearningScoreWord(targetEntry),
         user?.id ?? "anonymous",
         { authToken: accessToken },
       );
