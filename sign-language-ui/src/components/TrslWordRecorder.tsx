@@ -14,8 +14,10 @@ type CapturePhase = "idle" | "recording" | "pause";
 interface TrslWordRecorderProps {
   onComplete: (wordClips: Blob[]) => void | Promise<void>;
   onCancel: () => void;
+  autoStart?: boolean;
   inline?: boolean;
   maxWords?: number;
+  recorderLabel?: string;
   recordSeconds?: number;
   pauseSeconds?: number;
 }
@@ -23,8 +25,10 @@ interface TrslWordRecorderProps {
 export default function TrslWordRecorder({
   onComplete,
   onCancel,
+  autoStart = false,
   inline = false,
   maxWords = 5,
+  recorderLabel = "TRSL",
   recordSeconds = 3,
   pauseSeconds = 1,
 }: TrslWordRecorderProps) {
@@ -47,6 +51,8 @@ export default function TrslWordRecorder({
   const phaseTimeoutRef = useRef<number | null>(null);
   const tickIntervalRef = useRef<number | null>(null);
   const nextWordAfterPauseRef = useRef<number>(1);
+  const autoStartedRef = useRef(false);
+  const startSessionRef = useRef<(() => Promise<void>) | null>(null);
 
   const isRecording = phase === "recording";
   const isPause = phase === "pause";
@@ -289,6 +295,15 @@ export default function TrslWordRecorder({
     setCurrentWordNumber(1);
     beginRecordingPhase(1);
   };
+  startSessionRef.current = startSession;
+
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current || isSessionActiveRef.current) {
+      return;
+    }
+    autoStartedRef.current = true;
+    void startSessionRef.current?.();
+  }, [autoStart]);
 
   const stopNow = () => {
     if (!isSessionActiveRef.current) {
@@ -331,8 +346,10 @@ export default function TrslWordRecorder({
     if (isPause) {
       return "Reset for next word";
     }
-    return maxWords === 1 ? "Ready for TRSL one-word capture" : `Ready for TRSL ${maxWords}-word capture`;
-  }, [currentWordNumber, isPause, isRecording, maxWords]);
+    return maxWords === 1
+      ? `Ready for ${recorderLabel} one-word capture`
+      : `Ready for ${recorderLabel} ${maxWords}-word capture`;
+  }, [currentWordNumber, isPause, isRecording, maxWords, recorderLabel]);
 
   const startButtonLabel = maxWords === 1 ? "Start one-word capture" : `Start ${maxWords}-word capture`;
   const idleInstruction =
@@ -387,7 +404,9 @@ export default function TrslWordRecorder({
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-300">
                 <Video className="h-6 w-6" />
-                <p className="text-xs uppercase tracking-[0.2em]">TRSL Word Recorder</p>
+                <p className="text-xs uppercase tracking-[0.2em]">
+                  {recorderLabel} Word Recorder
+                </p>
               </div>
             )}
           </div>

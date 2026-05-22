@@ -37,7 +37,11 @@ import {
   getSignLibrary,
   type LibraryLanguage,
   type SignLibraryEntry,
+  scoreLearningAttempt,
+  type LearningScoreResponse,
 } from "@/lib/api";
+import { TRSL_WORD_PAUSE_SECONDS, TRSL_WORD_RECORDING_SECONDS } from "@/lib/config";
+import TrslWordRecorder from "@/components/TrslWordRecorder";
 
 type AuthMode = "login" | "signup";
 type PortalSection = "learn" | "library" | "progress";
@@ -683,6 +687,7 @@ export function LoginPage() {
 }
 
 export function LearnPage() {
+  const { accessToken, user } = useAuth();
   const [selectedLanguage, setSelectedLanguage] = useState<LibraryLanguage>("TRSL");
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<SignLibraryEntry[]>([]);
@@ -690,6 +695,12 @@ export function LearnPage() {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRecorderOpen, setIsRecorderOpen] = useState(false);
+  const [isScoringAttempt, setIsScoringAttempt] = useState(false);
+  const [recordingEntryId, setRecordingEntryId] = useState<string | null>(null);
+  const [attemptVideoUrl, setAttemptVideoUrl] = useState<string | null>(null);
+  const [attemptResult, setAttemptResult] = useState<LearningScoreResponse | null>(null);
+  const [attemptMessage, setAttemptMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -734,6 +745,14 @@ export function LearnPage() {
     setSelectedEntryId(null);
   }, [selectedLanguage]);
 
+  useEffect(() => {
+    return () => {
+      if (attemptVideoUrl) {
+        URL.revokeObjectURL(attemptVideoUrl);
+      }
+    };
+  }, [attemptVideoUrl]);
+
   const filteredEntries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return entries;
@@ -761,6 +780,65 @@ export function LearnPage() {
       : -1;
     const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % source.length : 0;
     setSelectedEntryId(source[nextIndex].id);
+  };
+
+  const clearAttemptVideo = () => {
+    setAttemptVideoUrl((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  };
+
+  const handleStartRecording = () => {
+    if (!selectedEntry) return;
+    setRecordingEntryId(selectedEntry.id);
+    setAttemptResult(null);
+    setAttemptMessage(null);
+    clearAttemptVideo();
+    setIsRecorderOpen(true);
+  };
+
+  const handlePracticeCaptureComplete = async (wordClips: Blob[]) => {
+    const clip = wordClips[0];
+    const targetEntry =
+      entries.find((entry) => entry.id === recordingEntryId) ?? selectedEntry;
+
+    setIsRecorderOpen(false);
+    if (!clip || !targetEntry) {
+      setAttemptMessage("No recording was captured. Please try again.");
+      return;
+    }
+
+    clearAttemptVideo();
+    setAttemptVideoUrl(URL.createObjectURL(clip));
+    setAttemptResult(null);
+    setAttemptMessage(null);
+
+    if (targetEntry.language !== "TRSL") {
+      setAttemptMessage("Recording captured. Automatic scoring is currently available for TRSL words only.");
+      return;
+    }
+
+    setIsScoringAttempt(true);
+    try {
+      const scoreResponse = await scoreLearningAttempt(
+        clip,
+        targetEntry.word,
+        user?.id ?? "anonymous",
+        { authToken: accessToken },
+      );
+      setAttemptResult(scoreResponse);
+    } catch (error) {
+      setAttemptMessage(
+        error instanceof Error
+          ? error.message
+          : "Recording captured, but scoring failed. Please try again.",
+      );
+    } finally {
+      setIsScoringAttempt(false);
+    }
   };
 
   return (
@@ -879,23 +957,69 @@ export function LearnPage() {
             </div>
           </div>
 
-          <div className="mt-5 flex aspect-[4/3] items-center justify-center rounded-lg border-2 border-dashed border-[#b9c8d8] bg-[#edf3f8]">
-            <div className="text-center">
-              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-white text-[#50627a] shadow-sm">
-                <Video className="h-8 w-8" aria-hidden="true" />
-              </span>
-              <p className="mt-4 text-sm font-semibold text-[#50627a]">Camera preview</p>
-            </div>
+          <div className="mt-5">
+            {isRecorderOpen ? (
+              <TrslWordRecorder
+                autoStart
+                inline
+                maxWords={1}
+                recorderLabel={selectedEntry?.language ?? selectedLanguage}
+                recordSeconds={TRSL_WORD_RECORDING_SECONDS}
+                pauseSeconds={TRSL_WORD_PAUSE_SECONDS}
+                onComplete={handlePracticeCaptureComplete}
+                onCancel={() => setIsRecorderOpen(false)}
+              />
+            ) : (
+              <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-[#b9c8d8] bg-[#edf3f8]">
+                {attemptVideoUrl ? (
+                  <video
+                    src={attemptVideoUrl}
+                    controls
+                    playsInline
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="text-center">
+                    <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-white text-[#50627a] shadow-sm">
+                      <Video className="h-8 w-8" aria-hidden="true" />
+                    </span>
+                    <p className="mt-4 text-sm font-semibold text-[#50627a]">Camera preview</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          <button
-            type="button"
-            disabled={!selectedEntry}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-3.5 text-sm font-bold text-white transition hover:bg-[#0b5d57]"
-          >
-            <Camera className="h-4 w-4" aria-hidden="true" />
-            Start Recording
-          </button>
+          {!isRecorderOpen && (
+            <button
+              type="button"
+              onClick={handleStartRecording}
+              disabled={!selectedEntry || isScoringAttempt}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-3.5 text-sm font-bold text-white transition hover:bg-[#0b5d57] disabled:cursor-not-allowed disabled:bg-[#9ba7b5]"
+            >
+              {isScoringAttempt ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Camera className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isScoringAttempt ? "Scoring Attempt" : "Start Recording"}
+            </button>
+          )}
+
+          {attemptResult && (
+            <div className="mt-4 rounded-lg border border-[#bfe7d7] bg-[#f0fff8] p-4 text-sm text-[#14594a]">
+              <p className="font-bold text-[#0f766e]">
+                Score: {Math.round(attemptResult.feedback.score)} / 100
+              </p>
+              <p className="mt-1">{attemptResult.feedback.grade.message}</p>
+            </div>
+          )}
+
+          {attemptMessage && (
+            <div className="mt-4 rounded-lg border border-[#f3d58a] bg-[#fff9e8] p-4 text-sm text-[#76530e]">
+              {attemptMessage}
+            </div>
+          )}
 
           <div className="mt-5 border-t border-[#d9e2ec] pt-5">
             <div className="flex items-center justify-between gap-3">
