@@ -1,4 +1,5 @@
 import { API_BASE, LEARNING_API_BASE } from "@/lib/config";
+import { getVideoFileName } from "@/lib/mediaRecorder";
 
 export type TextAvatarResponse = {
     sentence: string;
@@ -500,7 +501,7 @@ function defaultLearningScoreResponse(word: string): LearningScoreResponse {
 
 export async function translateVideo(videoBlob: Blob, lang: string): Promise<string> {
     const formData = new FormData();
-    formData.append("video", videoBlob, "recording.webm");
+    formData.append("video", videoBlob, getVideoFileName(videoBlob, "recording"));
     formData.append("lang", lang);
 
     const res = await fetch(`${API_BASE}/api/translate_video`, {
@@ -531,7 +532,7 @@ export async function translateTrslWordWithMeta(
     meta: TrslWordRequestMeta = {},
 ): Promise<string> {
     const formData = new FormData();
-    formData.append("video", videoBlob, "recording.webm");
+    formData.append("video", videoBlob, getVideoFileName(videoBlob, "recording"));
     formData.append("lang", "TRSL");
 
     const headers: Record<string, string> = {};
@@ -783,7 +784,7 @@ export async function scoreLearningAttempt(
     }
 
     const formData = new FormData();
-    formData.append("video", videoBlob, "attempt.webm");
+    formData.append("video", videoBlob, getVideoFileName(videoBlob, "attempt"));
     formData.append("word", normalizedWord);
     formData.append("user_id", userId);
     formData.append("debug", "true");

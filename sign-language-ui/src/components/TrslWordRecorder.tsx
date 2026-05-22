@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, Square, Video } from "lucide-react";
+import {
+  createVideoMediaRecorder,
+  getCameraRecordingUnavailableMessage,
+  getRecordedVideoMimeType,
+} from "@/lib/mediaRecorder";
 
 type CapturePhase = "idle" | "recording" | "pause";
 
@@ -172,13 +177,20 @@ export default function TrslWordRecorder({
     setError(null);
     chunksRef.current = [];
 
-    let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(streamRef.current as MediaStream, { mimeType: "video/webm" });
-    } catch {
-      recorder = new MediaRecorder(streamRef.current as MediaStream);
+      if (!streamRef.current) {
+        throw new Error("Camera stream is not ready yet.");
+      }
+      recorderRef.current = createVideoMediaRecorder(streamRef.current);
+    } catch (err) {
+      console.error("Failed to start TRSL recorder:", err);
+      setError(getCameraRecordingUnavailableMessage(err));
+      resetSessionState();
+      stopStream();
+      return;
     }
 
+    const recorder = recorderRef.current;
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
         chunksRef.current.push(event.data);
@@ -194,7 +206,9 @@ export default function TrslWordRecorder({
         return;
       }
 
-      const clip = new Blob(chunksRef.current, { type: "video/webm" });
+      const clip = new Blob(chunksRef.current, {
+        type: getRecordedVideoMimeType(recorder),
+      });
       if (clip.size <= 0) {
         if (stopRequestedRef.current) {
           completeSession();
@@ -215,8 +229,21 @@ export default function TrslWordRecorder({
       beginPausePhase(wordNumber + 1);
     };
 
-    recorderRef.current = recorder;
-    recorder.start();
+    recorder.onerror = (event) => {
+      console.error("TRSL recorder error:", event);
+      setError("Recording stopped unexpectedly. Please try again.");
+    };
+
+    try {
+      recorder.start();
+    } catch (err) {
+      console.error("Failed to start TRSL recorder:", err);
+      setError(getCameraRecordingUnavailableMessage(err));
+      recorderRef.current = null;
+      resetSessionState();
+      stopStream();
+      return;
+    }
 
     const recordDurationMs = recordSeconds * 1000;
     beginProgressTicker(recordDurationMs);
@@ -237,6 +264,10 @@ export default function TrslWordRecorder({
     setError(null);
 
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera recording is not available in this browser.");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false,
@@ -245,7 +276,7 @@ export default function TrslWordRecorder({
       setPreviewStream(stream);
     } catch (err) {
       console.error("Failed to access webcam:", err);
-      setError("Please allow webcam access to record TRSL words.");
+      setError(getCameraRecordingUnavailableMessage(err));
       return;
     }
 
@@ -300,8 +331,14 @@ export default function TrslWordRecorder({
     if (isPause) {
       return "Reset for next word";
     }
-    return "Ready for TRSL 5-word capture";
+    return maxWords === 1 ? "Ready for TRSL one-word capture" : `Ready for TRSL ${maxWords}-word capture`;
   }, [currentWordNumber, isPause, isRecording, maxWords]);
+
+  const startButtonLabel = maxWords === 1 ? "Start one-word capture" : `Start ${maxWords}-word capture`;
+  const idleInstruction =
+    maxWords === 1
+      ? "Press start to auto-capture one word."
+      : `Press start to auto-capture up to ${maxWords} words in one run.`;
 
   return (
     <AnimatePresence>
@@ -366,7 +403,7 @@ export default function TrslWordRecorder({
           >
             {isRecording && "Green: sign one word now (3s clip)."}
             {isPause && "Red: short reset pause (1s) before the next word."}
-            {!isRecording && !isPause && "Press start to auto-capture up to 5 words in one run."}
+            {!isRecording && !isPause && idleInstruction}
           </div>
 
           {error && (
@@ -384,7 +421,7 @@ export default function TrslWordRecorder({
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_8px_18px_-8px_rgba(16,185,129,0.8)]">
                   <Camera className="h-4 w-4" />
                 </span>
-                Start 5-word capture
+                {startButtonLabel}
               </button>
             ) : (
               <button

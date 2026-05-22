@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 import { MAX_RECORDING_SECONDS } from "@/lib/config";
+import {
+  createVideoMediaRecorder,
+  getCameraRecordingUnavailableMessage,
+  getRecordedVideoMimeType,
+} from "@/lib/mediaRecorder";
 
 interface UseMediaRecorderOptions {
   maxSeconds?: number;
@@ -45,6 +50,10 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}) {
 
   const startRecording = useCallback(async () => {
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera recording is not available in this browser.");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: false,
@@ -56,10 +65,12 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}) {
       discardNextBlobRef.current = false;
       setVideoBlob(null);
 
-      const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+      const recorder = createVideoMediaRecorder(stream);
       recorder.ondataavailable = (event) => chunksRef.current.push(event.data);
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
+        const blob = new Blob(chunksRef.current, {
+          type: getRecordedVideoMimeType(recorder),
+        });
         if (!discardNextBlobRef.current) {
           setVideoBlob(blob);
         }
@@ -87,7 +98,8 @@ export function useMediaRecorder(options: UseMediaRecorderOptions = {}) {
       }, 1000);
     } catch (err) {
       console.error("Failed to access webcam:", err);
-      alert("Please allow webcam access to record gestures.");
+      stopStream();
+      alert(getCameraRecordingUnavailableMessage(err));
     }
   }, [maxSeconds, stopRecording, stopStream]);
 
