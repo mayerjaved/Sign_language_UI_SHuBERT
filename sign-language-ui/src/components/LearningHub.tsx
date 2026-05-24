@@ -500,7 +500,11 @@ export default function LearningHub() {
         });
 
         try {
-            const scoreResponse = await scoreLearningAttempt(clip, challenge.word, userId, authOptions);
+            const scoreResponse = await scoreLearningAttempt(clip, challenge.word, userId, {
+                ...authOptions,
+                referenceClip: challenge.reference_clips[0]?.filename,
+                referenceWeight: 0.7,
+            });
             setResult(scoreResponse);
             applyProgressUpdate(challenge.word, scoreResponse.feedback.score);
             setPhase("result");

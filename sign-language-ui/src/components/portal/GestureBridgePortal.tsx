@@ -845,7 +845,11 @@ export function LearnPage() {
         clip,
         getLearningScoreWord(targetEntry),
         user?.id ?? "anonymous",
-        { authToken: accessToken },
+        {
+          authToken: accessToken,
+          referenceVideoId: targetEntry.video_id,
+          referenceWeight: 0.7,
+        },
       );
       setAttemptResult(scoreResponse);
     } catch (error) {

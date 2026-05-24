@@ -50,6 +50,9 @@ export interface LearningFeedbackDetails {
     target_similarity: number;
     target_percentile: number;
     target_distance?: number;
+    centroid_distance?: number;
+    reference_clip_distance?: number;
+    reference_clip?: string;
     wrong_word_distance?: number;
     margin: number;
     raw_score: number;
@@ -103,6 +106,9 @@ export interface LearningScoring {
     target_similarity: number;
     target_percentile: number;
     target_distance?: number;
+    centroid_distance?: number;
+    reference_clip_distance?: number;
+    reference_clip?: string;
     nearest_wrong_word: string;
     wrong_word_similarity: number;
     wrong_word_distance?: number;
@@ -146,6 +152,12 @@ export interface ApiRequestOptions {
     authToken?: string | null;
 }
 
+export interface LearningScoreRequestOptions extends ApiRequestOptions {
+    referenceClip?: string | null;
+    referenceVideoId?: string | null;
+    referenceWeight?: number | null;
+}
+
 export interface LearningDebugMetric {
     shape?: number[];
     dtype?: string;
@@ -187,6 +199,9 @@ export interface LearningScoreDebug {
         target_word?: string;
         predicted_word?: string;
         target_distance?: number;
+        centroid_distance?: number;
+        reference_clip_distance?: number;
+        reference_clip?: string;
         wrong_word_distance?: number;
         margin?: number;
         raw_score?: number;
@@ -778,7 +793,7 @@ export async function scoreLearningAttempt(
     videoBlob: Blob,
     word: string,
     userId = "anonymous",
-    options: ApiRequestOptions = {},
+    options: LearningScoreRequestOptions = {},
 ): Promise<LearningScoreResponse> {
     const normalizedWord = word.trim().toLowerCase();
     if (!normalizedWord) {
@@ -790,6 +805,17 @@ export async function scoreLearningAttempt(
     formData.append("word", normalizedWord);
     formData.append("user_id", userId);
     formData.append("debug", "true");
+    const referenceClip = options.referenceClip?.trim();
+    const referenceVideoId = options.referenceVideoId?.trim();
+    if (referenceClip) {
+        formData.append("reference_clip", referenceClip);
+    }
+    if (referenceVideoId) {
+        formData.append("reference_video_id", referenceVideoId);
+    }
+    if (typeof options.referenceWeight === "number" && Number.isFinite(options.referenceWeight)) {
+        formData.append("reference_weight", String(options.referenceWeight));
+    }
 
     const res = await fetch(`${LEARNING_API_BASE}/api/learning/score`, {
         method: "POST",
@@ -838,6 +864,9 @@ export async function scoreLearningAttempt(
             target_similarity: asNumber(scoringRecord.target_similarity, 0),
             target_percentile: asNumber(scoringRecord.target_percentile, 0),
             target_distance: asOptionalNumber(scoringRecord.target_distance),
+            centroid_distance: asOptionalNumber(scoringRecord.centroid_distance),
+            reference_clip_distance: asOptionalNumber(scoringRecord.reference_clip_distance),
+            reference_clip: asString(scoringRecord.reference_clip) || undefined,
             nearest_wrong_word: asString(scoringRecord.nearest_wrong_word),
             wrong_word_similarity: asNumber(scoringRecord.wrong_word_similarity, 0),
             wrong_word_distance: asOptionalNumber(scoringRecord.wrong_word_distance),
@@ -885,6 +914,9 @@ export async function scoreLearningAttempt(
                 target_similarity: asNumber(detailsRecord.target_similarity, 0),
                 target_percentile: asNumber(detailsRecord.target_percentile, 0),
                 target_distance: asOptionalNumber(detailsRecord.target_distance),
+                centroid_distance: asOptionalNumber(detailsRecord.centroid_distance),
+                reference_clip_distance: asOptionalNumber(detailsRecord.reference_clip_distance),
+                reference_clip: asString(detailsRecord.reference_clip) || undefined,
                 wrong_word_distance: asOptionalNumber(detailsRecord.wrong_word_distance),
                 margin: asNumber(detailsRecord.margin, 0),
                 raw_score: asNumber(detailsRecord.raw_score, 0),
