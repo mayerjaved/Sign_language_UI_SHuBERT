@@ -153,6 +153,7 @@ export interface ApiRequestOptions {
 }
 
 export interface LearningScoreRequestOptions extends ApiRequestOptions {
+    language?: string | null;
     referenceClip?: string | null;
     referenceVideoId?: string | null;
     referenceWeight?: number | null;
@@ -804,6 +805,7 @@ export async function scoreLearningAttempt(
     formData.append("video", videoBlob, getVideoFileName(videoBlob, "attempt"));
     formData.append("word", normalizedWord);
     formData.append("user_id", userId);
+    formData.append("language", options.language?.trim().toUpperCase() || "TRSL");
     formData.append("debug", "true");
     const referenceClip = options.referenceClip?.trim();
     const referenceVideoId = options.referenceVideoId?.trim();

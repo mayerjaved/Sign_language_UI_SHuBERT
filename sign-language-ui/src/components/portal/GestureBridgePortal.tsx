@@ -847,6 +847,7 @@ export function LearnPage() {
         user?.id ?? "anonymous",
         {
           authToken: accessToken,
+          language: targetEntry.language,
           referenceVideoId: targetEntry.video_id,
           referenceWeight: 0.7,
         },
