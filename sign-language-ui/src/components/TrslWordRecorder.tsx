@@ -70,6 +70,7 @@ export default function TrslWordRecorder({
     : isPause
     ? "bg-gradient-to-r from-rose-600 via-rose-500 to-red-400"
     : "bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-400";
+  const shouldShowProgressBar = isRecording || isPause;
   const containerClassName = inline
     ? "w-full overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl"
     : "absolute bottom-full left-0 mb-4 w-full overflow-hidden rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-glass)] p-4 shadow-[0_28px_70px_-45px_rgba(15,23,42,0.55)] backdrop-blur-xl";
@@ -401,7 +402,7 @@ export default function TrslWordRecorder({
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
         className={containerClassName}
       >
-        {(isRecording || isPause || isCountdown) && (
+        {shouldShowProgressBar && (
           <div
             className={`absolute left-0 top-0 h-1 ${barClassName}`}
             style={{ width: `${progressPercent}%` }}
@@ -425,7 +426,7 @@ export default function TrslWordRecorder({
             </span>
           </div>
 
-          <div className="aspect-video w-full overflow-hidden rounded-2xl border border-[color:var(--border)] bg-slate-950/95 shadow-inner">
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-[color:var(--border)] bg-slate-950/95 shadow-inner">
             {previewStream ? (
               <video
                 ref={previewRef}
@@ -442,6 +443,22 @@ export default function TrslWordRecorder({
                 {isCountdown ? <Clock3 className="h-6 w-6" /> : <Video className="h-6 w-6" />}
                 <p className="text-xs uppercase tracking-[0.2em]">
                   {recorderLabel} Word Recorder
+                </p>
+              </div>
+            )}
+            {isCountdown && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/55 px-4 text-center text-white backdrop-blur-[1px]">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-100">
+                  Step back
+                </p>
+                <div className="mt-3 flex h-24 w-24 items-center justify-center rounded-full border-4 border-white/80 bg-white/15 text-6xl font-black shadow-[0_18px_55px_rgba(0,0,0,0.35)]">
+                  {countdownSecondsLeft}
+                </div>
+                <p className="mt-3 text-sm font-bold text-sky-50">
+                  Recording starts after the countdown.
+                </p>
+                <p className="mt-1 max-w-xs text-xs font-semibold text-white/85">
+                  Keep your torso and both hands in the camera view.
                 </p>
               </div>
             )}
