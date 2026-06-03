@@ -678,6 +678,13 @@ Show-DeploySourceNotice -repoPath $repoRoot
 
 Load-EnvFile $envFile
 
+if (-not $env:LEARNING_SCORER) {
+  $env:LEARNING_SCORER = "phonology_v2"
+  Write-Host "LEARNING_SCORER not set; defaulting Learning API to phonology_v2." -ForegroundColor Cyan
+} else {
+  Write-Host "Using LEARNING_SCORER=$env:LEARNING_SCORER for Learning API startup." -ForegroundColor Cyan
+}
+
 if (-not $env:VERCEL_TOKEN -or (-not $env:VERCEL_PROJECT_ID -and -not $env:VERCEL_PROJECT_NAME)) {
   throw "Missing VERCEL_TOKEN and VERCEL_PROJECT_ID (or VERCEL_PROJECT_NAME) in .env.local."
 }
