@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera, Square, Video } from "lucide-react";
+import { Camera, Clock3, Square, Video } from "lucide-react";
 import {
   createVideoMediaRecorder,
   getCameraRecordingUnavailableMessage,
   getRecordedVideoMimeType,
 } from "@/lib/mediaRecorder";
 
-type CapturePhase = "idle" | "recording" | "pause";
+type CapturePhase = "idle" | "countdown" | "recording" | "pause";
 
 interface TrslWordRecorderProps {
   onComplete: (wordClips: Blob[]) => void | Promise<void>;
@@ -20,6 +20,7 @@ interface TrslWordRecorderProps {
   recorderLabel?: string;
   recordSeconds?: number;
   pauseSeconds?: number;
+  prepSeconds?: number;
 }
 
 export default function TrslWordRecorder({
@@ -31,6 +32,7 @@ export default function TrslWordRecorder({
   recorderLabel = "TRSL",
   recordSeconds = 3,
   pauseSeconds = 1,
+  prepSeconds = 3,
 }: TrslWordRecorderProps) {
   const [phase, setPhase] = useState<CapturePhase>("idle");
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -55,10 +57,17 @@ export default function TrslWordRecorder({
   const startSessionRef = useRef<(() => Promise<void>) | null>(null);
 
   const isRecording = phase === "recording";
+  const isCountdown = phase === "countdown";
   const isPause = phase === "pause";
-  const activeSeconds = isPause ? pauseSeconds : recordSeconds;
+  const activeSeconds = isCountdown ? prepSeconds : isPause ? pauseSeconds : recordSeconds;
   const progressPercent = Math.min((elapsedMs / (activeSeconds * 1000)) * 100, 100);
-  const barClassName = isPause
+  const countdownSecondsLeft = Math.max(
+    1,
+    Math.ceil((activeSeconds * 1000 - elapsedMs) / 1000),
+  );
+  const barClassName = isCountdown
+    ? "bg-gradient-to-r from-sky-600 via-blue-500 to-cyan-400"
+    : isPause
     ? "bg-gradient-to-r from-rose-600 via-rose-500 to-red-400"
     : "bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-400";
   const containerClassName = inline
@@ -174,6 +183,26 @@ export default function TrslWordRecorder({
       }
       beginRecordingPhase(nextWordAfterPauseRef.current);
     }, pauseDurationMs);
+  };
+
+  const beginCountdownPhase = (wordNumber: number) => {
+    if (!isSessionActiveRef.current) return;
+    setPhase("countdown");
+    setCurrentWordNumber(wordNumber);
+    setError(null);
+    const prepDurationMs = prepSeconds * 1000;
+    beginProgressTicker(prepDurationMs);
+    stopPhaseTimeout();
+    phaseTimeoutRef.current = window.setTimeout(() => {
+      stopPhaseTimeout();
+      stopTick();
+      if (!isSessionActiveRef.current) return;
+      if (stopRequestedRef.current) {
+        completeSession();
+        return;
+      }
+      beginRecordingPhase(wordNumber);
+    }, prepDurationMs);
   };
 
   const beginRecordingPhase = (wordNumber: number) => {
@@ -293,7 +322,7 @@ export default function TrslWordRecorder({
     capturedRef.current = [];
     setCapturedCount(0);
     setCurrentWordNumber(1);
-    beginRecordingPhase(1);
+    beginCountdownPhase(1);
   };
   startSessionRef.current = startSession;
 
@@ -317,6 +346,10 @@ export default function TrslWordRecorder({
     }
 
     if (isPause) {
+      completeSession();
+    }
+
+    if (isCountdown) {
       completeSession();
     }
   };
@@ -343,13 +376,16 @@ export default function TrslWordRecorder({
     if (isRecording) {
       return `Recording word ${currentWordNumber} / ${maxWords}`;
     }
+    if (isCountdown) {
+      return `Get ready: recording starts in ${countdownSecondsLeft}`;
+    }
     if (isPause) {
       return "Reset for next word";
     }
     return maxWords === 1
       ? `Ready for ${recorderLabel} one-word capture`
       : `Ready for ${recorderLabel} ${maxWords}-word capture`;
-  }, [currentWordNumber, isPause, isRecording, maxWords, recorderLabel]);
+  }, [countdownSecondsLeft, currentWordNumber, isCountdown, isPause, isRecording, maxWords, recorderLabel]);
 
   const startButtonLabel = maxWords === 1 ? "Start one-word capture" : `Start ${maxWords}-word capture`;
   const idleInstruction =
@@ -365,7 +401,7 @@ export default function TrslWordRecorder({
         exit={{ opacity: 0, scale: 0.98, y: 10 }}
         className={containerClassName}
       >
-        {(isRecording || isPause) && (
+        {(isRecording || isPause || isCountdown) && (
           <div
             className={`absolute left-0 top-0 h-1 ${barClassName}`}
             style={{ width: `${progressPercent}%` }}
@@ -375,10 +411,10 @@ export default function TrslWordRecorder({
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between text-sm text-[color:var(--muted)]">
             <div className="flex items-center gap-2 font-medium">
-              {(isRecording || isPause) && (
+              {(isRecording || isPause || isCountdown) && (
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    isPause ? "bg-rose-500" : "bg-emerald-500"
+                    isCountdown ? "bg-sky-500" : isPause ? "bg-rose-500" : "bg-emerald-500"
                   }`}
                 />
               )}
@@ -403,7 +439,7 @@ export default function TrslWordRecorder({
               />
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-slate-300">
-                <Video className="h-6 w-6" />
+                {isCountdown ? <Clock3 className="h-6 w-6" /> : <Video className="h-6 w-6" />}
                 <p className="text-xs uppercase tracking-[0.2em]">
                   {recorderLabel} Word Recorder
                 </p>
@@ -413,16 +449,23 @@ export default function TrslWordRecorder({
 
           <div
             className={`rounded-xl border px-3 py-2 text-xs ${
-              isPause
+              isCountdown
+                ? "border-sky-200 bg-sky-50 text-sky-700"
+                : isPause
                 ? "border-rose-200 bg-rose-50 text-rose-700"
                 : isRecording
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-[color:var(--border)] bg-[color:var(--surface-soft)] text-[color:var(--muted)]"
             }`}
           >
+            {isCountdown && `Step back now. Recording starts in ${countdownSecondsLeft}s.`}
             {isRecording && "Green: sign one word now (3s clip)."}
             {isPause && "Red: short reset pause (1s) before the next word."}
-            {!isRecording && !isPause && idleInstruction}
+            {!isCountdown && !isRecording && !isPause && idleInstruction}
+          </div>
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            Keep your whole torso and both hands inside the camera frame for the full recording.
           </div>
 
           {error && (
@@ -444,11 +487,11 @@ export default function TrslWordRecorder({
               </button>
             ) : (
               <button
-                onClick={stopNow}
+                onClick={isCountdown ? handleCancel : stopNow}
                 className="flex items-center gap-3 rounded-full bg-rose-500 px-6 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_-16px_rgba(244,63,94,0.9)] transition-all hover:bg-rose-400"
               >
                 <Square className="h-4 w-4 fill-white" />
-                Stop and translate
+                {isCountdown ? "Cancel countdown" : "Stop and translate"}
               </button>
             )}
           </div>

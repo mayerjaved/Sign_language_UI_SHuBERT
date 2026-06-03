@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
-  Activity,
   ArrowRight,
   BadgeCheck,
   BarChart3,
@@ -72,7 +71,6 @@ const navItems: NavItem[] = [
   { id: "learn", label: "Learn", href: "/learn", icon: GraduationCap },
   { id: "library", label: "Library", href: "/library", icon: BookOpen },
   { id: "progress", label: "Progress", href: "/progress", icon: BarChart3 },
-  { id: "logs", label: "Logs", href: "/learning-logs", icon: Activity },
 ];
 
 const masteryItems: MasteryItem[] = [
@@ -363,7 +361,7 @@ export function PortalShell({ activeSection, eyebrow, title, subtitle, children 
         className="fixed bottom-0 left-0 z-50 w-full border-t border-[#d9e2ec] bg-white px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2 shadow-[0_-12px_30px_rgba(16,32,51,0.08)] md:hidden"
         aria-label="Mobile navigation"
       >
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
+        <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.id === activeSection;
