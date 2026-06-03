@@ -139,6 +139,109 @@ export interface LearningStats {
     recent_words: string[];
 }
 
+export interface LearningScoreLogSubscore {
+    available?: boolean;
+    distance?: number | null;
+    target_distance?: number | null;
+    reference_distance?: number | null;
+    score?: number | null;
+    pass?: boolean | null;
+    reason?: string | null;
+    threshold?: number | null;
+    posterior_entropy?: number | null;
+    codebook_size?: number | null;
+    diagnostics?: Record<string, unknown> | null;
+}
+
+export interface LearningScoreLogEvent {
+    event?: string;
+    source?: string;
+    timestamp_iso?: string;
+    timestamp_unix?: number;
+    request_id?: string;
+    attempt_id?: string;
+    user_id?: string;
+    language?: string;
+    target_word?: string;
+    score?: number | null;
+    target_distance?: number | null;
+    skip_reason?: string | null;
+    status_code?: number | null;
+    error?: string | null;
+    warnings?: string[];
+    timings_ms?: Record<string, number>;
+    request?: {
+        filename?: string | null;
+        content_type?: string | null;
+        uploaded_size_bytes?: number | null;
+        uploaded_sha256?: string | null;
+        features_path?: string | null;
+        reference_clip?: string | null;
+        reference_video_id?: string | null;
+        reference_weight?: number | null;
+    };
+    video?: {
+        frame_count?: number | null;
+        height?: number | null;
+        width?: number | null;
+        channels?: number | null;
+        decoder_repaired?: boolean | null;
+        retained?: boolean | null;
+    };
+    reference?: Record<string, unknown> | null;
+    scoring?: {
+        target_word?: string;
+        predicted_word?: string;
+        target_distance?: number | null;
+        centroid_distance?: number | null;
+        reference_clip_distance?: number | null;
+        reference_clip?: string | null;
+        wrong_word_distance?: number | null;
+        margin?: number | null;
+        raw_score?: number | null;
+        calibrated_score?: number | null;
+        scoring_mode?: string;
+        scorer_version?: string;
+        scoring_streams?: string[];
+        ignored_streams?: string[];
+        skipped?: boolean;
+        skip_reason?: string | null;
+        subscores?: Record<string, LearningScoreLogSubscore>;
+    };
+    backend?: Record<string, unknown> | null;
+    feedback?: Record<string, unknown> | null;
+    raw?: Record<string, unknown>;
+}
+
+export interface LearningScoreLogResponse {
+    events: LearningScoreLogEvent[];
+    count: number;
+    matched_count: number;
+    scanned_count: number;
+    log_path: string;
+    exists: boolean;
+    summary?: {
+        success?: number;
+        error?: number;
+        zero?: number;
+    };
+}
+
+export interface LearningScoreLogFilters extends ApiRequestOptions {
+    limit?: number;
+    scanLimit?: number;
+    query?: string;
+    word?: string;
+    language?: string;
+    userId?: string;
+    event?: string;
+    zeroOnly?: boolean;
+    errorsOnly?: boolean;
+    minScore?: number | null;
+    maxScore?: number | null;
+    includeRaw?: boolean;
+}
+
 export interface LearningHealth {
     status: "ok" | "error";
     words_available?: number;
@@ -958,6 +1061,63 @@ export async function confirmLearningAttempt(
         const detail = await readErrorDetail(res);
         throw new Error(`Unable to confirm attempt: ${detail}`);
     }
+}
+
+export async function getLearningScoreEvents(
+    filters: LearningScoreLogFilters = {},
+): Promise<LearningScoreLogResponse> {
+    const params = new URLSearchParams();
+    params.set("limit", String(filters.limit ?? 50));
+    params.set("scan_limit", String(filters.scanLimit ?? 2000));
+    if (filters.query?.trim()) {
+        params.set("q", filters.query.trim());
+    }
+    if (filters.word?.trim()) {
+        params.set("word", filters.word.trim());
+    }
+    if (filters.language?.trim()) {
+        params.set("language", filters.language.trim().toUpperCase());
+    }
+    if (filters.userId?.trim()) {
+        params.set("user_id", filters.userId.trim());
+    }
+    if (filters.event?.trim()) {
+        params.set("event", filters.event.trim());
+    }
+    if (filters.zeroOnly) {
+        params.set("zero_only", "true");
+    }
+    if (filters.errorsOnly) {
+        params.set("errors_only", "true");
+    }
+    if (typeof filters.minScore === "number" && Number.isFinite(filters.minScore)) {
+        params.set("min_score", String(filters.minScore));
+    }
+    if (typeof filters.maxScore === "number" && Number.isFinite(filters.maxScore)) {
+        params.set("max_score", String(filters.maxScore));
+    }
+    if (filters.includeRaw) {
+        params.set("include_raw", "true");
+    }
+
+    const res = await fetch(`${LEARNING_API_BASE}/api/learning/score-events?${params.toString()}`, {
+        cache: "no-store",
+        headers: getAuthHeaders(filters),
+    });
+    if (!res.ok) {
+        const detail = await readErrorDetail(res);
+        throw new Error(`Unable to load score events: ${detail}`);
+    }
+    const payload = (await res.json()) as LearningScoreLogResponse;
+    return {
+        events: Array.isArray(payload.events) ? payload.events : [],
+        count: asNumber(payload.count, 0),
+        matched_count: asNumber(payload.matched_count, 0),
+        scanned_count: asNumber(payload.scanned_count, 0),
+        log_path: asString(payload.log_path),
+        exists: Boolean(payload.exists),
+        summary: payload.summary && typeof payload.summary === "object" ? payload.summary : undefined,
+    };
 }
 
 export async function getLearningStats(
