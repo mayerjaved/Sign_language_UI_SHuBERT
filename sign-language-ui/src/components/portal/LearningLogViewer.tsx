@@ -150,19 +150,19 @@ function EventCard({
   const filename = event.request?.filename ?? event.request?.features_path ?? "no file recorded";
   const hash = event.request?.uploaded_sha256;
 
-  const copyRequestId = async () => {
-    const text = event.request_id ?? event.attempt_id;
+  const copyText = async (text?: string | null) => {
     if (!text || typeof navigator === "undefined") return;
     await navigator.clipboard.writeText(text);
   };
 
+  const copyRequestId = () => copyText(event.request_id ?? event.attempt_id);
+  const copyAttemptId = () => copyText(event.attempt_id);
+  const copyVideoHash = () => copyText(hash);
+  const copyEventJson = () => copyText(JSON.stringify(event, null, 2));
+
   return (
-    <article className="rounded-lg border border-[#d9e2ec] bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full flex-col gap-4 p-4 text-left transition hover:bg-[#f8fbfd] lg:flex-row lg:items-start lg:justify-between"
-      >
+    <article className="select-text rounded-lg border border-[#d9e2ec] bg-white shadow-sm">
+      <div className="flex w-full flex-col gap-4 p-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
@@ -215,13 +215,21 @@ function EventCard({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <span className="rounded-lg bg-[#edf3f8] px-3 py-2 font-mono text-xs font-bold text-[#29425f]">
             {compactId(event.request_id)}
           </span>
-          {expanded ? <ChevronUp className="h-5 w-5" aria-hidden="true" /> : <ChevronDown className="h-5 w-5" aria-hidden="true" />}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            className="select-none rounded-lg border border-[#c9d6e2] bg-white p-2 text-[#29425f] transition hover:bg-[#edf3f8] focus:outline-none focus:ring-4 focus:ring-[#2563eb]/10"
+            title={expanded ? "Collapse event details" : "Expand event details"}
+          >
+            {expanded ? <ChevronUp className="h-5 w-5" aria-hidden="true" /> : <ChevronDown className="h-5 w-5" aria-hidden="true" />}
+          </button>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-[#e3ebf3] p-4">
@@ -254,13 +262,41 @@ function EventCard({
             <button
               type="button"
               onClick={copyRequestId}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 py-2 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
+              className="inline-flex select-none items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 py-2 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
             >
               <Clipboard className="h-4 w-4" aria-hidden="true" />
               Copy request id
             </button>
+            {event.attempt_id && (
+              <button
+                type="button"
+                onClick={copyAttemptId}
+                className="inline-flex select-none items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 py-2 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
+              >
+                <Clipboard className="h-4 w-4" aria-hidden="true" />
+                Copy attempt id
+              </button>
+            )}
+            {hash && (
+              <button
+                type="button"
+                onClick={copyVideoHash}
+                className="inline-flex select-none items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 py-2 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
+              >
+                <Clipboard className="h-4 w-4" aria-hidden="true" />
+                Copy video sha
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={copyEventJson}
+              className="inline-flex select-none items-center gap-2 rounded-lg border border-[#c9d6e2] bg-white px-3 py-2 text-sm font-bold text-[#29425f] transition hover:bg-[#edf3f8]"
+            >
+              <Clipboard className="h-4 w-4" aria-hidden="true" />
+              Copy event JSON
+            </button>
           </div>
-          <pre className="mt-4 max-h-96 overflow-auto rounded-lg bg-[#102033] p-4 text-xs leading-5 text-[#dbeafe]">
+          <pre className="mt-4 max-h-96 select-text overflow-auto rounded-lg bg-[#102033] p-4 text-xs leading-5 text-[#dbeafe]">
             {JSON.stringify(event, null, 2)}
           </pre>
         </div>
