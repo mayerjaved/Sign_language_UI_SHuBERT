@@ -182,6 +182,18 @@ function getLearningScoreWord(entry: SignLibraryEntry) {
   return toLearningWordKey(entry.word);
 }
 
+function uniqueMessages(messages: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const message of messages) {
+    const cleaned = message?.trim();
+    if (!cleaned || seen.has(cleaned)) continue;
+    seen.add(cleaned);
+    unique.push(cleaned);
+  }
+  return unique;
+}
+
 function AuthStatusScreen({ message }: { message: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f6f8fb] px-4 text-[#102033]">
@@ -863,6 +875,12 @@ export function LearnPage() {
       setIsScoringAttempt(false);
     }
   };
+  const attemptWarnings = attemptResult
+    ? uniqueMessages([
+        ...(attemptResult.scoring.warnings ?? []),
+        ...(attemptResult.feedback.details.warnings ?? []),
+      ])
+    : [];
 
   return (
     <PortalShell
@@ -1035,6 +1053,22 @@ export function LearnPage() {
                 Score: {Math.round(attemptResult.feedback.score)} / 100
               </p>
               <p className="mt-1">{attemptResult.feedback.grade.message}</p>
+              {attemptWarnings.length > 0 && (
+                <div className="mt-3 rounded-lg border border-[#f3d58a] bg-[#fff9e8] p-3 text-[#76530e]">
+                  {attemptWarnings.map((warning) => (
+                    <p key={warning} className="font-semibold">
+                      {warning}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {attemptResult.feedback.hints.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {attemptResult.feedback.hints.map((hint) => (
+                    <p key={hint}>{hint}</p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
