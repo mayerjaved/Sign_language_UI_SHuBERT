@@ -558,6 +558,11 @@ export default function LearningHub() {
               ...(result.feedback.details.warnings ?? []),
           ])
         : [];
+    const resultHints = result
+        ? uniqueMessages(result.feedback.hints ?? []).filter(
+              (hint) => !debugWarnings.includes(hint),
+          )
+        : [];
     const debugCalibration =
         result?.debug?.scoring?.calibration ??
         result?.scoring.calibration ??
@@ -989,7 +994,7 @@ export default function LearningHub() {
                                         Coaching Hints
                                     </p>
                                     <div className="mt-2 space-y-2 text-sm text-[color:var(--ink)]">
-                                        {result.feedback.hints.map((hint, index) => (
+                                        {resultHints.map((hint, index) => (
                                             <p key={`${index}-${hint}`}>- {hint}</p>
                                         ))}
                                     </div>

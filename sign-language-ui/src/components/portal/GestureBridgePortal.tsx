@@ -881,6 +881,11 @@ export function LearnPage() {
         ...(attemptResult.feedback.details.warnings ?? []),
       ])
     : [];
+  const attemptHints = attemptResult
+    ? uniqueMessages(attemptResult.feedback.hints ?? []).filter(
+        (hint) => !attemptWarnings.includes(hint),
+      )
+    : [];
 
   return (
     <PortalShell
@@ -1062,9 +1067,9 @@ export function LearnPage() {
                   ))}
                 </div>
               )}
-              {attemptResult.feedback.hints.length > 0 && (
+              {attemptHints.length > 0 && (
                 <div className="mt-3 space-y-1">
-                  {attemptResult.feedback.hints.map((hint) => (
+                  {attemptHints.map((hint) => (
                     <p key={hint}>{hint}</p>
                   ))}
                 </div>
