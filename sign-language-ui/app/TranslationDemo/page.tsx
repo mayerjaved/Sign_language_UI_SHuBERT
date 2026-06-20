@@ -251,16 +251,18 @@ export default function Home() {
   const [homeTab, setHomeTab] = useState<HomeTab>("sign2text");
   const [pendingHomeScrollTarget, setPendingHomeScrollTarget] = useState<HomeTab | null>(null);
   const [activeNav, setActiveNav] = useState<NavTab>("home");
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") {
-      return "light";
-    }
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
     const stored = window.localStorage.getItem("slai-theme");
     if (stored === "light" || stored === "dark") {
-      return stored;
+      setThemeMode(stored);
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      setThemeMode("dark");
     }
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  }, []);
   const [showSettings, setShowSettings] = useState(false);
   const [homeAvatarPrompt, setHomeAvatarPrompt] = useState("");
   const [isGeneratingHomeAvatar, setIsGeneratingHomeAvatar] = useState(false);

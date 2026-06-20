@@ -1,7 +1,6 @@
 #for Vercel cloud redeploy
 powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_backend_and_vercel.ps1 -RestartBackend
-cd C:\code_projects\SHuBERT_transferLearning docker compose up -d --force-recreate trsl-api
-
+ 
 #for local UI hotreload build
 powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_full_stack.ps1
 powershell -ExecutionPolicy Bypass -File .\sign-language-ui\start_full_stack.ps1 -ForceTrslRebuild
