@@ -12,6 +12,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Force UTF-8 for every Python child process started below (backend + learning
+# API). Without this, Windows redirects their stdout/stderr as cp1252, and any
+# non-ASCII character in a print() (e.g. an arrow glyph) raises
+# UnicodeEncodeError mid-request. Child processes inherit these env vars.
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+
 $uiDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $uiDir
 $envFile = Join-Path $uiDir ".env.local"
@@ -679,8 +686,8 @@ Show-DeploySourceNotice -repoPath $repoRoot
 Load-EnvFile $envFile
 
 if (-not $env:LEARNING_SCORER) {
-  $env:LEARNING_SCORER = "phonology_v2"
-  Write-Host "LEARNING_SCORER not set; defaulting Learning API to phonology_v2." -ForegroundColor Cyan
+  $env:LEARNING_SCORER = "kid"
+  Write-Host "LEARNING_SCORER not set; defaulting Learning API to kid developmental scoring." -ForegroundColor Cyan
 } else {
   Write-Host "Using LEARNING_SCORER=$env:LEARNING_SCORER for Learning API startup." -ForegroundColor Cyan
 }
