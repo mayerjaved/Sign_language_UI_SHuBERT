@@ -159,25 +159,51 @@ export default function AvatarPlayer({
         }
         applySkin();
 
-        // Frame the UPPER BODY — signing happens at the head/chest/hands, so look
-        // at ~shoulder height and fit roughly head→waist, instead of centring on
-        // the bbox middle (which lands on the hips and looks zoomed into the crotch).
-        const box = new THREE.Box3().setFromObject(model);
-        const size = box.getSize(new THREE.Vector3());
-        const centerX = (box.min.x + box.max.x) / 2;
-        const centerZ = (box.min.z + box.max.z) / 2;
-        // Look at the chest/shoulder line (~76% up from the feet) so the framing
-        // starts on the upper torso every time, not the hips.
-        const targetY = box.min.y + size.y * 0.76;
-        // Fit head -> ~waist VERTICALLY only. Width is ignored on purpose: the
-        // mesh's bind pose has arms out to the sides (size.x ~ size.y), so a
-        // width-fit would zoom far out; the animated avatar keeps its arms in.
-        const viewH = size.y * 0.58;
-        const vfov = (camera.fov * Math.PI) / 180;
-        const dist = (viewH / 2 / Math.tan(vfov / 2)) * 1.15;
+        // Start the animation FIRST, then pose the skeleton at frame 0, so we can
+        // read the avatar's REAL world positions below.
+        if (gltf.animations.length) {
+          const mixer = new THREE.AnimationMixer(model);
+          mixer.clipAction(gltf.animations[0]).play();
+          mixerRef.current = mixer;
+          mixer.update(0);
+        }
+        model.updateMatrixWorld(true);
 
-        controls.target.set(centerX, targetY, centerZ);
-        camera.position.set(centerX, targetY, centerZ + dist); // straight in front
+        // Frame the UPPER BODY from ACTUAL posed bone positions. A plain
+        // Box3.setFromObject returns the un-posed BIND pose, which sits ~0.35 m
+        // below the animated avatar (the up-fix bakes a root translation) — that
+        // mismatch is what aimed the camera at the hips/crotch.
+        const worldOf = (name: string): THREE.Vector3 | null => {
+          const b = model.getObjectByName(name);
+          return b ? b.getWorldPosition(new THREE.Vector3()) : null;
+        };
+        const head = worldOf("head");
+        const pelvis = worldOf("pelvis");
+        const chest = worldOf("spine3") ?? worldOf("spine2") ?? worldOf("neck");
+
+        let target: THREE.Vector3;
+        let viewH: number;
+        if (head && pelvis && chest) {
+          const topY = head.y + 0.15; // crown sits ~0.15 m above the head joint
+          const botY = pelvis.y - 0.05; // just below the hips (catches low signs)
+          target = new THREE.Vector3(chest.x, (topY + botY) / 2, chest.z);
+          viewH = Math.max(topY - botY, 0.3) * 1.12;
+        } else {
+          // fallback: upper portion of the static bounding box
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          target = new THREE.Vector3(
+            (box.min.x + box.max.x) / 2,
+            box.min.y + size.y * 0.78,
+            (box.min.z + box.max.z) / 2,
+          );
+          viewH = size.y * 0.55;
+        }
+
+        const vfov = (camera.fov * Math.PI) / 180;
+        const dist = (viewH / 2 / Math.tan(vfov / 2)) * 1.1;
+        controls.target.copy(target);
+        camera.position.set(target.x, target.y, target.z + dist); // straight in front
         camera.near = Math.max(dist / 100, 0.01);
         camera.far = dist * 10 + 10;
         camera.updateProjectionMatrix();
@@ -185,11 +211,6 @@ export default function AvatarPlayer({
         controls.maxDistance = dist * 1.6;
         controls.update();
 
-        if (gltf.animations.length) {
-          const mixer = new THREE.AnimationMixer(model);
-          mixer.clipAction(gltf.animations[0]).play();
-          mixerRef.current = mixer;
-        }
         setLoading(false);
       },
       undefined,
