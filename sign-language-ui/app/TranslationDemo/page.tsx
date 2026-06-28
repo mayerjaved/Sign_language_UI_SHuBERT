@@ -16,6 +16,7 @@ import {
   Sun,
   Video,
 } from "lucide-react";
+import AvatarPlayer from "@/components/AvatarPlayer";
 import LanguageSelector from "@/components/LanguageSelector";
 import LearningHub from "@/components/LearningHub";
 import MessageBubble from "@/components/MessageBubble";
@@ -266,7 +267,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [homeAvatarPrompt, setHomeAvatarPrompt] = useState("");
   const [isGeneratingHomeAvatar, setIsGeneratingHomeAvatar] = useState(false);
-  const [homeAvatarVideoUrl, setHomeAvatarVideoUrl] = useState<string | null>(null);
+  const [homeAvatarGlbUrl, setHomeAvatarGlbUrl] = useState<string | null>(null);
   const [homeAvatarStatus, setHomeAvatarStatus] = useState<string | null>(null);
   const [homeAvatarError, setHomeAvatarError] = useState<string | null>(null);
   const [waitlistEmail, setWaitlistEmail] = useState("");
@@ -486,7 +487,7 @@ export default function Home() {
 
     setHomeAvatarError(null);
     setHomeAvatarStatus(null);
-    setHomeAvatarVideoUrl(null);
+    setHomeAvatarGlbUrl(null);
 
     if (targetLang !== "ASL") {
       setHomeAvatarError("Text-to-avatar is currently available only when ASL is selected.");
@@ -496,8 +497,12 @@ export default function Home() {
     setIsGeneratingHomeAvatar(true);
     try {
       const response = await generateTextAvatar(trimmed, targetLang);
-      setHomeAvatarVideoUrl(response.video_src);
-      setHomeAvatarStatus(`Generated ASL avatar for: "${response.resolved_sentence}"`);
+      setHomeAvatarGlbUrl(response.glb_src);
+      const missing = response.missing_words ?? [];
+      setHomeAvatarStatus(
+        `Signing: "${response.resolved_sentence}"` +
+          (missing.length ? ` (skipped: ${missing.join(", ")})` : ""),
+      );
     } catch (error) {
       console.error(error);
       const detail =
@@ -1223,12 +1228,8 @@ export default function Home() {
                           {homeAvatarError && (
                             <p className="mt-2 text-sm font-medium text-rose-600">{homeAvatarError}</p>
                           )}
-                          {homeAvatarVideoUrl && (
-                            <video
-                              src={homeAvatarVideoUrl}
-                              controls
-                              className="mt-3 w-full overflow-hidden rounded-xl border border-[color:var(--border)]"
-                            />
+                          {homeAvatarGlbUrl && (
+                            <AvatarPlayer glbUrl={homeAvatarGlbUrl} className="mt-3" />
                           )}
                           {!isGeneratingHomeAvatar &&
                             !homeAvatarError &&

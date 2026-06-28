@@ -5,10 +5,8 @@ export type TextAvatarResponse = {
     sentence: string;
     resolved_sentence: string;
     lang: string;
-    run_id: string;
-    run_dir: string;
-    video_url: string;
-    video_file: string;
+    glb_url: string;
+    missing_words?: string[];
 };
 
 export interface LearningReferenceClip {
@@ -689,7 +687,7 @@ export async function translateTrslWordWithMeta(
 export async function generateTextAvatar(
     sentence: string,
     lang: string,
-): Promise<TextAvatarResponse & { video_src: string }> {
+): Promise<TextAvatarResponse & { glb_src: string }> {
     const formData = new FormData();
     formData.append("sentence", sentence);
     formData.append("lang", lang);
@@ -707,7 +705,7 @@ export async function generateTextAvatar(
     const data = (await res.json()) as TextAvatarResponse;
     return {
         ...data,
-        video_src: toAbsoluteApiUrl(data.video_url),
+        glb_src: toAbsoluteApiUrl(data.glb_url),
     };
 }
 
