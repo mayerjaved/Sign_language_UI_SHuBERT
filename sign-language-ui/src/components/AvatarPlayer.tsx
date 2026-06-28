@@ -201,7 +201,7 @@ export default function AvatarPlayer({
         }
 
         const vfov = (camera.fov * Math.PI) / 180;
-        const dist = (viewH / 2 / Math.tan(vfov / 2)) * 1.1;
+        const dist = (viewH / 2 / Math.tan(vfov / 2)) * 1.3; // a little extra pull-back
         controls.target.copy(target);
         camera.position.set(target.x, target.y, target.z + dist); // straight in front
         camera.near = Math.max(dist / 100, 0.01);
