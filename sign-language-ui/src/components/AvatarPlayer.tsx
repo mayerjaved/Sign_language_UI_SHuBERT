@@ -36,7 +36,7 @@ export default function AvatarPlayer({
   const frameRef = useRef<number>(0);
 
   const [color, setColor] = useState<string>(SKIN_PRESETS[0]);
-  const [wireframe, setWireframe] = useState<boolean>(false);
+  const [wireframe, setWireframe] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +64,13 @@ export default function AvatarPlayer({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 1.3, 0);
     controls.enableDamping = true;
+    // Constrain the view: front ±45° horizontally, only a little vertical tilt,
+    // and no panning — so the avatar can't be dragged off-centre or spun around.
+    controls.enablePan = false;
+    controls.minAzimuthAngle = -Math.PI / 4; // 45° to the left of front
+    controls.maxAzimuthAngle = Math.PI / 4; // 45° to the right of front
+    controls.minPolarAngle = Math.PI / 2 - 0.45; // ~26° above eye level
+    controls.maxPolarAngle = Math.PI / 2 + 0.25; // ~14° below eye level
     controlsRef.current = controls;
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x33384a, 1.1));
@@ -152,12 +159,31 @@ export default function AvatarPlayer({
         }
         applySkin();
 
-        // frame the avatar
+        // Frame the UPPER BODY — signing happens at the head/chest/hands, so look
+        // at ~shoulder height and fit roughly head→waist, instead of centring on
+        // the bbox middle (which lands on the hips and looks zoomed into the crotch).
         const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
-        controls.target.copy(center);
-        camera.position.set(center.x, center.y + size.y * 0.05, center.z + size.y * 1.4);
+        const centerX = (box.min.x + box.max.x) / 2;
+        const centerZ = (box.min.z + box.max.z) / 2;
+        // Look at the chest/shoulder line (~76% up from the feet) so the framing
+        // starts on the upper torso every time, not the hips.
+        const targetY = box.min.y + size.y * 0.76;
+        // Fit head -> ~waist VERTICALLY only. Width is ignored on purpose: the
+        // mesh's bind pose has arms out to the sides (size.x ~ size.y), so a
+        // width-fit would zoom far out; the animated avatar keeps its arms in.
+        const viewH = size.y * 0.58;
+        const vfov = (camera.fov * Math.PI) / 180;
+        const dist = (viewH / 2 / Math.tan(vfov / 2)) * 1.15;
+
+        controls.target.set(centerX, targetY, centerZ);
+        camera.position.set(centerX, targetY, centerZ + dist); // straight in front
+        camera.near = Math.max(dist / 100, 0.01);
+        camera.far = dist * 10 + 10;
+        camera.updateProjectionMatrix();
+        controls.minDistance = dist * 0.55; // keep zoom sane (no diving into the mesh)
+        controls.maxDistance = dist * 1.6;
+        controls.update();
 
         if (gltf.animations.length) {
           const mixer = new THREE.AnimationMixer(model);
