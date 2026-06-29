@@ -11,6 +11,7 @@ import {
     type ReactNode,
 } from "react";
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
+import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import { getSupabaseConfigurationError, isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSupabaseErrorMessage, toSupabaseError } from "@/lib/supabase/errors";
@@ -91,6 +92,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             subscription.unsubscribe();
         };
     }, [supabase]);
+
+    useEffect(() => {
+        const user = session?.user;
+        if (!user) {
+            return;
+        }
+
+        // Tie all PostHog events to this user so activity is attributable.
+        posthog.identify(user.id, {
+            email: user.email,
+            full_name:
+                typeof user.user_metadata?.full_name === "string"
+                    ? user.user_metadata.full_name
+                    : undefined,
+        });
+    }, [session?.user]);
 
     useEffect(() => {
         if (!supabase || !session?.user) {
@@ -240,6 +257,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!supabase) return;
         const { error } = await supabase.auth.signOut();
         if (error) throw toSupabaseError(error, "Unable to sign out.");
+        // Stop attributing subsequent events to the signed-out user.
+        posthog.reset();
     }, [supabase]);
 
     const value = useMemo<AuthContextValue>(

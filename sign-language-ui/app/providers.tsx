@@ -7,7 +7,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 if (typeof window !== 'undefined') {
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
+    api_host: '/ingest', // Reverse proxy (see next.config rewrites) so ad-blockers don't drop events
+    ui_host: 'https://us.posthog.com', // Keeps toolbar/links pointing at PostHog itself
     person_profiles: 'identified_only',
     capture_pageview: false, // We capture manually below
     capture_pageleave: true,
