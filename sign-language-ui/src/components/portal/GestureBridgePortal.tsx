@@ -513,8 +513,10 @@ export function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f6f8fb] px-4 py-8 text-[#102033] sm:px-6">
-      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-md flex-col justify-center">
+    <main className="relative min-h-screen overflow-x-hidden bg-[color:var(--page)] px-4 py-8 text-[color:var(--ink)] selection:bg-blue-200/60 sm:px-6">
+      <div className="pointer-events-none absolute -top-48 right-[-20%] h-[420px] w-[420px] rounded-full bg-sky-200/40 blur-[160px]" />
+      <div className="pointer-events-none absolute -top-64 left-[-10%] h-[520px] w-[520px] rounded-full bg-cyan-200/35 blur-[180px]" />
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-md flex-col justify-center">
         <div className="mb-8 flex flex-col items-center text-center">
           <Link href="/" className="flex items-center gap-3" aria-label="GestureBridge">
             <span className="flex h-12 w-12 items-center justify-center rounded-lg border border-[#d9e2ec] bg-white shadow-sm">
@@ -523,7 +525,7 @@ export function LoginPage() {
             <span className="text-2xl font-bold text-[#102033]">GestureBridge</span>
           </Link>
           <p className="mt-3 text-sm text-[#5d6b7c]">
-            {isSignup ? "Create your learning account." : "Sign in to your learning account."}
+            Connecting the world through sign language.
           </p>
         </div>
 
@@ -532,11 +534,11 @@ export function LoginPage() {
             <h1 className="text-2xl font-bold text-[#102033]">
               {isSignup ? "Create account" : "Log in"}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-[#5d6b7c]">
-              {isSignup
-                ? "Set up a profile for lessons, library, and progress."
-                : "Enter your email and password to continue."}
-            </p>
+            {isSignup && (
+              <p className="mt-2 text-sm leading-6 text-[#5d6b7c]">
+                Set up a profile for lessons, library, and progress.
+              </p>
+            )}
           </div>
 
             {!isConfigured && (
