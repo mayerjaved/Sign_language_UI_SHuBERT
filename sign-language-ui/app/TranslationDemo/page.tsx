@@ -2,11 +2,13 @@
 
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Camera,
   FileUp,
   GraduationCap,
   Home as HomeIcon,
+  LogOut,
   MessageCircle,
   Moon,
   Search,
@@ -16,6 +18,7 @@ import {
   Sun,
   Video,
 } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 import AvatarPlayer from "@/components/AvatarPlayer";
 import LanguageSelector from "@/components/LanguageSelector";
 import LearningHub from "@/components/LearningHub";
@@ -56,6 +59,17 @@ interface MessagingThread {
 
 const WAITLIST_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEMO_VIDEO_EMBED_URL = "https://www.youtube.com/embed/7v4QswMwBuA";
+
+function getInitials(email?: string | null, fullName?: string | null) {
+  const source = fullName?.trim() || email?.split("@")[0] || "User";
+  const initials = source
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0]?.toUpperCase())
+    .join("");
+  return initials || "GB";
+}
 
 const makeSeedTime = (hour: number, minute: number): Date => {
   const stamp = new Date();
@@ -233,6 +247,10 @@ const smoothScrollElementToViewportCenter = (element: HTMLElement, durationMs = 
 };
 
 export default function Home() {
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const [languages, setLanguages] = useState<SignLanguage[]>(["ASL", "TRSL"]);
   const [targetLang, setTargetLang] = useState<SignLanguage>("ASL");
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
@@ -284,6 +302,9 @@ export default function Home() {
   const threadBottomRef = useRef<HTMLDivElement>(null);
   const activeThreadIdRef = useRef(activeThreadId);
 
+  const accountDisplayName =
+    typeof user?.user_metadata?.full_name === "string" ? user.user_metadata.full_name : null;
+  const accountInitials = getInitials(user?.email, accountDisplayName);
   const isHome = activeNav === "home";
   const isSign2Text = homeTab === "sign2text";
   const isTrslWordMode = isSign2Text && targetLang === "TRSL";
@@ -307,6 +328,34 @@ export default function Home() {
     document.addEventListener("mousedown", closeOnClick);
     return () => document.removeEventListener("mousedown", closeOnClick);
   }, []);
+
+  useEffect(() => {
+    if (!showAccountMenu) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setShowAccountMenu(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowAccountMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showAccountMenu]);
+
+  const handleSignOut = async () => {
+    setShowAccountMenu(false);
+    await signOut();
+    router.replace("/");
+  };
 
   useEffect(() => {
     getLanguages().then((langs) => {
@@ -793,6 +842,48 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {user && (
+                <div ref={accountMenuRef} className="relative">
+                  <button
+                    onClick={() => setShowAccountMenu((prev) => !prev)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-sm font-bold text-white shadow-sm transition-all hover:from-sky-400 hover:to-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-200/30"
+                    title={user.email ?? "Signed in"}
+                    aria-label="Open account menu"
+                    aria-haspopup="menu"
+                    aria-expanded={showAccountMenu}
+                  >
+                    {accountInitials}
+                  </button>
+
+                  {showAccountMenu && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 mt-3 w-64 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] text-sm text-[color:var(--ink)] shadow-lg"
+                    >
+                      <div className="border-b border-[color:var(--border)] px-4 py-3">
+                        <p className="truncate font-bold">
+                          {accountDisplayName ?? "GestureBridge user"}
+                        </p>
+                        {user.email && (
+                          <p className="mt-1 truncate text-xs font-semibold text-[color:var(--muted)]">
+                            {user.email}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleSignOut}
+                        className="flex w-full items-center gap-2 px-4 py-3 text-left font-bold text-[color:var(--ink)] transition-all hover:bg-[color:var(--surface-soft)]"
+                      >
+                        <LogOut className="h-4 w-4" aria-hidden="true" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </header>
