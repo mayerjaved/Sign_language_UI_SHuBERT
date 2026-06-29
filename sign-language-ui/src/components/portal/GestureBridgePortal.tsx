@@ -404,7 +404,6 @@ export function LoginPage() {
     isConfigured,
     isLoading,
     signInWithEmail,
-    signInWithGoogle,
     signUpWithEmail,
     resendSignUpConfirmation,
     resetPassword,
@@ -469,18 +468,6 @@ export function LoginPage() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setErrorMessage(null);
-    setStatusMessage(null);
-    setIsSubmitting(true);
-    try {
-      await signInWithGoogle();
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Google sign-in failed.");
       setIsSubmitting(false);
     }
   };
@@ -685,17 +672,6 @@ export function LoginPage() {
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={isAuthUnavailable || isSubmitting}
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-[#c9d6e2] bg-white px-4 py-3.5 text-sm font-bold text-[#102033] transition hover:bg-[#f7fafc] disabled:cursor-not-allowed disabled:text-[#8493a5]"
-              >
-                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#d9e2ec] text-xs font-black">
-                  G
-                </span>
-                Continue with Google
-              </button>
             </form>
 
             <form action="/auth/demo" method="post" className="mt-3">

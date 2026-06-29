@@ -32,7 +32,6 @@ interface AuthContextValue {
     signInWithEmail: (email: string, password: string) => Promise<void>;
     signUpWithEmail: (email: string, password: string, fullName: string) => Promise<string | null>;
     resendSignUpConfirmation: (email: string) => Promise<void>;
-    signInWithGoogle: () => Promise<void>;
     resetPassword: (email: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
@@ -229,18 +228,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         [supabase],
     );
 
-    const signInWithGoogle = useCallback(async () => {
-        if (!supabase) throw new Error("Supabase is not configured.");
-
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: {
-                redirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
-            },
-        });
-        if (error) throw toSupabaseError(error, "Google sign-in failed.");
-    }, [supabase]);
-
     const resetPassword = useCallback(
         async (email: string) => {
             if (!supabase) throw new Error("Supabase is not configured.");
@@ -272,7 +259,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             signInWithEmail,
             signUpWithEmail,
             resendSignUpConfirmation,
-            signInWithGoogle,
             resetPassword,
             signOut,
         }),
@@ -283,7 +269,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             resetPassword,
             session,
             signInWithEmail,
-            signInWithGoogle,
             signOut,
             signUpWithEmail,
         ],
