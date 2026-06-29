@@ -180,10 +180,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     data: {
                         full_name: fullName,
                     },
-                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/learn"),
+                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
                 },
             });
             if (error) throw toSupabaseError(error, "Sign up failed.");
+
+            // Supabase hides whether an email is already registered (anti-enumeration):
+            // a fully-confirmed account comes back with a user object but an empty identities array.
+            if (data.user && data.user.identities && data.user.identities.length === 0) {
+                throw toSupabaseError("An account with this email already exists. Please sign in instead.");
+            }
+
             return data.session ? null : "Check your email to confirm your account before signing in.";
         },
         [supabase],
@@ -197,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 type: "signup",
                 email,
                 options: {
-                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/learn"),
+                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
                 },
             });
             if (error) throw toSupabaseError(error, "Unable to send confirmation email.");
@@ -211,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: {
-                redirectTo: getRedirectUrl("/auth/callback?next=/learn"),
+                redirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
             },
         });
         if (error) throw toSupabaseError(error, "Google sign-in failed.");
@@ -222,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!supabase) throw new Error("Supabase is not configured.");
 
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: getRedirectUrl("/auth/callback?next=/learn"),
+                redirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
             });
             if (error) throw toSupabaseError(error, "Unable to send reset email.");
         },

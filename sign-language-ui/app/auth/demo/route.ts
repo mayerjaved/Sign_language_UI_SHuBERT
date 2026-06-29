@@ -4,7 +4,7 @@ import { getSupabaseErrorMessage } from "@/lib/supabase/errors";
 
 function getSafeNext(value: FormDataEntryValue | string | null) {
     const next = typeof value === "string" ? value : "";
-    return next.startsWith("/") && !next.startsWith("//") ? next : "/learn";
+    return next.startsWith("/") && !next.startsWith("//") ? next : "/TranslationDemo";
 }
 
 function redirectWithAuthError(origin: string, error: string, errorCode?: string | null) {

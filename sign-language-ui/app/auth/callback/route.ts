@@ -17,10 +17,10 @@ export async function GET(request: Request) {
     const code = searchParams.get("code");
     const authError = searchParams.get("error_description") ?? searchParams.get("error");
     const authErrorCode = searchParams.get("error_code");
-    let next = searchParams.get("next") ?? "/learn";
+    let next = searchParams.get("next") ?? "/TranslationDemo";
 
     if (!next.startsWith("/")) {
-        next = "/learn";
+        next = "/TranslationDemo";
     }
 
     if (authError) {
