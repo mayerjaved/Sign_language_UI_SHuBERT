@@ -196,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     data: {
                         full_name: fullName,
                     },
-                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
+                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/Translation"),
                 },
             });
             if (error) throw toSupabaseError(error, "Sign up failed.");
@@ -220,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 type: "signup",
                 email,
                 options: {
-                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
+                    emailRedirectTo: getRedirectUrl("/auth/callback?next=/Translation"),
                 },
             });
             if (error) throw toSupabaseError(error, "Unable to send confirmation email.");
@@ -233,7 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!supabase) throw new Error("Supabase is not configured.");
 
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: getRedirectUrl("/auth/callback?next=/TranslationDemo"),
+                redirectTo: getRedirectUrl("/auth/callback?next=/Translation"),
             });
             if (error) throw toSupabaseError(error, "Unable to send reset email.");
         },

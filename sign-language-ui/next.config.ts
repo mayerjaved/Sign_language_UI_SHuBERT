@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Preserve the old shared /TranslationDemo link by redirecting it to /Translation.
+  async redirects() {
+    return [
+      { source: "/TranslationDemo", destination: "/Translation", permanent: true },
+    ];
+  },
   // PostHog uses trailing-slash API routes; don't redirect them.
   skipTrailingSlashRedirect: true,
 };

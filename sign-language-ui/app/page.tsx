@@ -16,7 +16,7 @@ export default async function Home({ searchParams }: HomeProps) {
   if (code) {
     const callbackParams = new URLSearchParams({
       code,
-      next: "/TranslationDemo",
+      next: "/Translation",
     });
 
     redirect(`/auth/callback?${callbackParams.toString()}`);

@@ -434,7 +434,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && user) {
-      router.replace("/TranslationDemo");
+      router.replace("/Translation");
     }
   }, [isLoading, router, user]);
 
@@ -464,7 +464,7 @@ export function LoginPage() {
       } else {
         await signInWithEmail(normalizedEmail, password);
       }
-      router.replace("/TranslationDemo");
+      router.replace("/Translation");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
@@ -675,7 +675,7 @@ export function LoginPage() {
             </form>
 
             <form action="/auth/demo" method="post" className="mt-3">
-              <input type="hidden" name="next" value="/TranslationDemo" />
+              <input type="hidden" name="next" value="/Translation" />
               <button
                 type="submit"
                 disabled={isAuthUnavailable || isSubmitting}
