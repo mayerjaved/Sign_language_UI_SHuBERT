@@ -809,7 +809,7 @@ export default function Home() {
             </div>
 
             {/* Waitlist */}
-            <div className="mx-auto w-full max-w-3xl rounded-[26px] border border-[color:var(--border)] bg-[color:var(--surface)]/88 p-5 shadow-sm md:p-6">
+            <div className="w-full rounded-[26px] border border-[color:var(--border)] bg-[color:var(--surface)]/88 p-5 shadow-sm md:p-6">
               <form id="waitlist-form" onSubmit={handleWaitlistSubmit}>
                 <p className="text-sm font-semibold text-[color:var(--ink)]">Join the waitlist</p>
                 <p className="mt-1 text-xs text-[color:var(--muted)]">
@@ -883,7 +883,7 @@ export default function Home() {
             </div>
 
             {/* About us (expandable, single bordered box) */}
-            <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)]/88 shadow-sm">
+            <div className="w-full overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)]/88 shadow-sm">
               <button
                 type="button"
                 onClick={() => setAboutOpen((prev) => !prev)}
