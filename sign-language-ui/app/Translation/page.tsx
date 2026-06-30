@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowLeftRight,
   Camera,
   ChevronDown,
   FileUp,
@@ -540,17 +541,9 @@ export default function Home() {
           <div className="mx-auto w-full max-w-5xl space-y-8">
             {/* Hero: minimal value proposition */}
             <div className="mx-auto max-w-3xl text-center">
-              <p className="inline-flex items-center gap-2 rounded-full border border-sky-300/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-500">
-                <Sparkles className="h-3.5 w-3.5" />
-                American Sign Language
-              </p>
-              <h1 className="mt-4 text-3xl font-semibold leading-tight text-[color:var(--ink)] md:text-5xl">
-                Sign language, understood by everyone.
+              <h1 className="text-xl font-semibold leading-tight text-[color:var(--ink)] md:text-3xl">
+                The global sign language translation engine.
               </h1>
-              <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-[color:var(--muted)] md:text-base">
-                Type a message and watch an avatar sign it in ASL — or record a sign to get
-                instant text. Real-time translation, both directions.
-              </p>
             </div>
 
             {/* Interactive demo card */}
@@ -562,12 +555,11 @@ export default function Home() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-[color:var(--ink)]">Try it live</p>
-                    <p className="text-xs text-[color:var(--muted)]">Pick a direction below.</p>
                   </div>
-                  <div className="flex items-center rounded-full bg-[color:var(--surface-soft)] p-1 text-xs font-semibold text-[color:var(--muted)]">
+                  <div className="flex items-center gap-1 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-1 text-sm font-semibold text-[color:var(--muted)] shadow-sm">
                     <button
                       onClick={() => switchHomeTab("text2sign")}
-                      className={`rounded-full px-3 py-1.5 transition-all ${
+                      className={`rounded-full px-4 py-2 transition-all ${
                         !isSign2Text
                           ? "bg-[color:var(--surface)] text-[color:var(--ink)] shadow-sm"
                           : "hover:text-[color:var(--ink)]"
@@ -575,9 +567,13 @@ export default function Home() {
                     >
                       Text to Sign
                     </button>
+                    <ArrowLeftRight
+                      className="h-4 w-4 flex-shrink-0 text-sky-500"
+                      aria-hidden="true"
+                    />
                     <button
                       onClick={() => switchHomeTab("sign2text")}
-                      className={`rounded-full px-3 py-1.5 transition-all ${
+                      className={`rounded-full px-4 py-2 transition-all ${
                         isSign2Text
                           ? "bg-[color:var(--surface)] text-[color:var(--ink)] shadow-sm"
                           : "hover:text-[color:var(--ink)]"
@@ -766,33 +762,13 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="mt-4 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] p-4">
-                    <p className="text-xs font-medium text-[color:var(--muted)]">Type a message</p>
-                    <textarea
-                      value={homeAvatarPrompt}
-                      onChange={(event) => {
-                        setHomeAvatarPrompt(event.target.value);
-                        if (homeAvatarError) {
-                          setHomeAvatarError(null);
-                        }
-                      }}
-                      placeholder={`Type a message for ${targetLang} avatar...`}
-                      className="mt-3 h-24 w-full resize-none rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--ink)] outline-none transition-all focus:border-blue-400/40 focus:ring-4 focus:ring-blue-200/30"
-                    />
-                    <button
-                      onClick={handleHomeAvatarPreview}
-                      disabled={!homeAvatarPrompt.trim() || isGeneratingHomeAvatar}
-                      className="mt-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500 disabled:opacity-55"
-                    >
-                      {isGeneratingHomeAvatar ? "Generating Avatar..." : "Generate Sign Output"}
-                      <Sparkles className="h-4 w-4" />
-                    </button>
-                    <div className="mt-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-sm">
-                      <p className="text-xs font-medium text-[color:var(--muted)]">Result</p>
+                    {/* Avatar signing on top */}
+                    <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-sm">
                       {isGeneratingHomeAvatar ? (
-                        <p className="mt-2 text-[color:var(--ink)]">Generating ASL avatar locally...</p>
+                        <p className="text-[color:var(--ink)]">Generating avatar...</p>
                       ) : (
-                        <p className="mt-2 text-[color:var(--ink)]">
-                          {homeAvatarStatus || "Your generated avatar will appear here."}
+                        <p className="text-[color:var(--ink)]">
+                          {homeAvatarStatus || "Your signed avatar will appear here."}
                         </p>
                       )}
                       {homeAvatarError && (
@@ -805,6 +781,28 @@ export default function Home() {
                         </p>
                       )}
                     </div>
+
+                    {/* Type-a-message input below the avatar */}
+                    <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">Type a message</p>
+                    <textarea
+                      value={homeAvatarPrompt}
+                      onChange={(event) => {
+                        setHomeAvatarPrompt(event.target.value);
+                        if (homeAvatarError) {
+                          setHomeAvatarError(null);
+                        }
+                      }}
+                      placeholder={`Type a message for the ${targetLang} avatar...`}
+                      className="mt-1.5 h-24 w-full resize-none rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--ink)] outline-none transition-all focus:border-blue-400/40 focus:ring-4 focus:ring-blue-200/30"
+                    />
+                    <button
+                      onClick={handleHomeAvatarPreview}
+                      disabled={!homeAvatarPrompt.trim() || isGeneratingHomeAvatar}
+                      className="mt-3 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition-all hover:from-sky-500 hover:to-blue-500 disabled:opacity-55"
+                    >
+                      {isGeneratingHomeAvatar ? "Generating Avatar..." : "Generate Sign Output"}
+                      <Sparkles className="h-4 w-4" />
+                    </button>
                   </div>
                 )}
               </div>
@@ -884,13 +882,13 @@ export default function Home() {
               </form>
             </div>
 
-            {/* About us (expandable) */}
-            <div className="mx-auto w-full max-w-3xl">
+            {/* About us (expandable, single bordered box) */}
+            <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)]/88 shadow-sm">
               <button
                 type="button"
                 onClick={() => setAboutOpen((prev) => !prev)}
                 aria-expanded={aboutOpen}
-                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)]/88 px-5 py-4 text-left shadow-sm transition-all hover:bg-[color:var(--surface-soft)]"
+                className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-all hover:bg-[color:var(--surface-soft)]"
               >
                 <span className="text-sm font-semibold text-[color:var(--ink)]">About us</span>
                 <ChevronDown
@@ -900,15 +898,15 @@ export default function Home() {
                 />
               </button>
               {aboutOpen && (
-                <div className="mt-2 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)]/88 px-5 py-4 text-sm leading-relaxed text-[color:var(--muted)] shadow-sm">
+                <div className="border-t border-[color:var(--border)] px-5 py-4 text-sm leading-relaxed text-[color:var(--muted)]">
                   <p>
                     There are over{" "}
                     <span className="font-semibold text-[color:var(--ink)]">70 million</span> deaf
-                    people around the world. They are just as smart and just as capable as anyone —
-                    but a lack of accessible communication holds them back. That&apos;s why we&apos;re
-                    building{" "}
-                    <span className="font-semibold text-[color:var(--ink)]">Gesture Bridge</span>: a
-                    two-way, global sign language app that closes the gap.
+                    people around the world. They are the fabric of our society, just as smart and
+                    just as capable as us. But a lack of accessible communication holds them back.
+                    That&apos;s where{" "}
+                    <span className="font-semibold text-[color:var(--ink)]">Gesture Bridge</span>{" "}
+                    comes in: the two-way, global sign language app.
                   </p>
                 </div>
               )}
